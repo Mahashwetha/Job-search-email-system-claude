@@ -1,0 +1,58 @@
+========================================
+DAILY JOB SEARCH - SETUP INSTRUCTIONS
+========================================
+
+QUICK SETUP (Choose ONE option):
+========================================
+
+OPTION 1: Using the Batch File (EASIEST)
+-----------------------------------------
+1. Right-click on "setup_task_admin.bat"
+2. Select "Run as administrator"
+3. Click "Yes" if prompted by User Account Control
+4. You should see "SUCCESS! Scheduled task created"
+
+OPTION 2: Using PowerShell Script
+----------------------------------
+1. Right-click on "setup_scheduled_task.ps1"
+2. Select "Run with PowerShell" as administrator
+3. Click "Yes" if prompted by User Account Control
+
+OPTION 3: Manual Setup via Task Scheduler
+------------------------------------------
+1. Press Win + R, type: taskschd.msc
+2. Click "Create Basic Task"
+3. Name: DailyJobSearch
+4. Trigger: Daily at 10:00 AM
+5. Action: Start a program
+6. Program: Browse to your "run_daily_job_search.bat" file
+7. Click Finish
+
+========================================
+VERIFY IT WORKS
+========================================
+1. Press Win + R, type: taskschd.msc
+2. Look for "DailyJobSearch" in the task list
+3. Right-click it and select "Run" to test immediately
+4. Check your email for the job search report
+
+========================================
+MANUAL RUN (Anytime)
+========================================
+If you want to run it manually without waiting for 10:00 AM:
+
+Option A: Double-click run_daily_job_search.bat
+Option B: Run in terminal:
+   cd <your-project-folder>
+   python daily_job_search.py
+
+========================================
+TROUBLESHOOTING
+========================================
+- Make sure your computer is ON at 10:00 AM
+- Check the log file: job_search_log.txt
+- Verify Excel tracker path is correct in config.py
+- Email credentials in config.py should be valid
+- Make sure config.py exists (copy from config.template.py)
+
+========================================
