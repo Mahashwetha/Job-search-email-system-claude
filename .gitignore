@@ -1,0 +1,35 @@
+# Private configuration
+config.py
+
+# Excel tracker with private data
+*.xlsx
+# But DO track the template
+!tracker_template.xlsx
+
+# Log files
+job_search_log.txt
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code
+.claude/
+
+# OS files
+.DS_Store
+Thumbs.db
