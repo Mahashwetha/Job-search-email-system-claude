@@ -123,9 +123,9 @@ Format your Excel file like this:
 
 | Company | Role | Role link | status of application |
 |---------|------|-----------|----------------------|
-| Datadog | Backend general specialist | https://... | In progress |
-| Mirakl | Engineering Manager Java | https://... | Rejected |
-| Doctolib | Senior Software Engineer | https://... | done |
+| abc | Backend general specialist | https://... | In progress |
+| xyz | Engineering Manager Java | https://... | Rejected |
+| hogwarts | Senior Software Engineer | https://... | done |
 
 **Required Columns:**
 - **Column A**: Company name (required)
