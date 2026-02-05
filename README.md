@@ -1,6 +1,6 @@
 # Claude Job Search Agent 🎯
 
-An automated daily job search agent that emails you curated senior-level job opportunities. Focuses on Software Developer (Java), Backend Java Developer, and Product Owner roles in Paris/France.
+An automated daily job search system that emails you curated senior-level job opportunities. Focuses on Software Developer (Java), Backend Java Developer, and Product Owner roles. Easily customize for your location.
 
 ## Features
 
@@ -26,6 +26,17 @@ An automated daily job search agent that emails you curated senior-level job opp
 - ✅ Applied
 - ⏸️ No Jobs Available
 - ❌ Rejected
+
+## 🌍 Important: Customize for Your Location
+
+This tool comes with sample job search links. **Before using:**
+1. Open `daily_job_search.py`
+2. Update the location variables at the top (lines 15-16):
+   ```python
+   LOCATION_CITY = "YourCity"      # Change from "Paris"
+   LOCATION_COUNTRY = "YourCountry" # Change from "France"
+   ```
+3. Optionally update the job board URLs to match your location (see [Customize URLs](#customize-for-your-location) below)
 
 ## Prerequisites
 
@@ -170,22 +181,30 @@ claude-job-agent/
 
 **No code changes needed** - just update your Excel file and the next email will include the new companies.
 
-### Add More Platform Aggregators
+### Customize for Your Location
 
-To add job search platforms (like Glassdoor, LinkedIn), edit the `PLATFORM_AGGREGATORS` dictionary in `daily_job_search.py`:
+**Quick Setup (Just 2 Variables!):**
+
+Open `daily_job_search.py` and update lines 15-16:
 
 ```python
-PLATFORM_AGGREGATORS = {
-    'Software Developer (Java) - SENIOR/EXPERT': [
-        {
-            'name': 'Indeed',
-            'links': [
-                ('Senior Java Paris', 'https://indeed.com/jobs?q=senior+java&l=Paris')
-            ]
-        },
-    ]
-}
+LOCATION_CITY = "Paris"         # ← Change to your city (e.g., "London", "Berlin")
+LOCATION_COUNTRY = "France"     # ← Change to your country (e.g., "UK", "Germany")
 ```
+
+This automatically updates:
+- ✅ Email header location display
+- ✅ All job search link labels
+
+**Optional: Update Job Board URLs**
+
+If you want to customize the actual URLs for your location:
+
+1. Find the `PLATFORM_AGGREGATORS` section (around line 35)
+2. Update URLs for your region's job boards
+3. Add job boards popular in your country
+
+**Tip:** The link labels already use your location variables, so you only need to update the URLs themselves.
 
 ### Change Email Time
 
