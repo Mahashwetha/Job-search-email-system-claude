@@ -22,35 +22,43 @@ except ImportError:
     print("See README.md for instructions.")
     exit(1)
 
+# ============= LOCATION SETTINGS =============
+# CUSTOMIZE THESE FOR YOUR LOCATION!
+# These variables are used in job search URLs and email headers
+LOCATION_CITY = "Paris"
+LOCATION_COUNTRY = "France"
+# Examples: "London", "UK" | "New York", "USA" | "Berlin", "Germany"
+
 # NOTE: Company data is now dynamically built from your Excel tracker
 # See build_companies_by_role() function below
 
 # Platform aggregators by role
+# Uses LOCATION_CITY and LOCATION_COUNTRY variables defined above
 PLATFORM_AGGREGATORS = {
     'Software Developer (Java) - SENIOR/EXPERT': [
         {
             'name': 'Glassdoor',
             'links': [
-                ('67 Senior Java Paris', 'https://www.glassdoor.com/Job/paris-senior-java-developer-jobs-SRCH_IL.0,5_IC2881970_KO6,27.htm'),
-                ('35 Senior Java France', 'https://www.glassdoor.com/Job/france-senior-software-engineer-java-developer-jobs-SRCH_IL.0,6_IN86_KO7,46.htm')
+                (f'67 Senior Java {LOCATION_CITY}', 'https://www.glassdoor.com/Job/paris-senior-java-developer-jobs-SRCH_IL.0,5_IC2881970_KO6,27.htm'),
+                (f'35 Senior Java {LOCATION_COUNTRY}', 'https://www.glassdoor.com/Job/france-senior-software-engineer-java-developer-jobs-SRCH_IL.0,6_IN86_KO7,46.htm')
             ]
         },
         {
             'name': 'LinkedIn',
             'links': [
-                ('2,000+ Senior Java Paris', 'https://www.linkedin.com/jobs/java-software-engineer-jobs-paris')
+                (f'2,000+ Senior Java {LOCATION_CITY}', 'https://www.linkedin.com/jobs/java-software-engineer-jobs-paris')
             ]
         },
         {
             'name': 'EnglishJobs.fr',
             'links': [
-                ('Senior Java France', 'https://englishjobs.fr/in/paris/java')
+                (f'Senior Java {LOCATION_COUNTRY}', 'https://englishjobs.fr/in/paris/java')
             ]
         },
         {
             'name': 'WelcomeToTheJungle',
             'links': [
-                ('Senior Java Paris (FR)', 'https://www.welcometothejungle.com/fr/jobs?query=java&aroundQuery=Paris')
+                (f'Senior Java {LOCATION_CITY} (FR)', 'https://www.welcometothejungle.com/fr/jobs?query=java&aroundQuery=Paris')
             ]
         }
     ],
@@ -58,19 +66,19 @@ PLATFORM_AGGREGATORS = {
         {
             'name': 'Glassdoor',
             'links': [
-                ('67 Lead Java Paris', 'https://www.glassdoor.com/Job/paris-lead-java-developer-jobs-SRCH_IL.0,5_IC2881970_KO6,25.htm')
+                (f'67 Lead Java {LOCATION_CITY}', 'https://www.glassdoor.com/Job/paris-lead-java-developer-jobs-SRCH_IL.0,5_IC2881970_KO6,25.htm')
             ]
         },
         {
             'name': 'EnglishJobs.fr',
             'links': [
-                ('Backend Developer France', 'https://englishjobs.fr/jobs/backend_developer')
+                (f'Backend Developer {LOCATION_COUNTRY}', 'https://englishjobs.fr/jobs/backend_developer')
             ]
         },
          {
             'name': 'WelcomeToTheJungle',
             'links': [
-                ('Backend Java Paris (FR)', 'https://www.welcometothejungle.com/fr/jobs?query=backend+java&aroundQuery=Paris')
+                (f'Backend Java {LOCATION_CITY} (FR)', 'https://www.welcometothejungle.com/fr/jobs?query=backend+java&aroundQuery=Paris')
             ]
         }
     ],
@@ -78,19 +86,19 @@ PLATFORM_AGGREGATORS = {
         {
             'name': 'Glassdoor',
             'links': [
-                ('234 PO Paris', 'https://www.glassdoor.com/Job/paris-product-owner-jobs-SRCH_IL.0,5_IC2881970_KO6,19.htm')
+                (f'234 PO {LOCATION_CITY}', 'https://www.glassdoor.com/Job/paris-product-owner-jobs-SRCH_IL.0,5_IC2881970_KO6,19.htm')
             ]
         },
         {
             'name': 'LinkedIn',
             'links': [
-                ('1,000+ PO Paris', 'https://www.linkedin.com/jobs/product-owner-jobs-paris')
+                (f'1,000+ PO {LOCATION_CITY}', 'https://www.linkedin.com/jobs/product-owner-jobs-paris')
             ]
         },
         {
             'name': 'WelcomeToTheJungle',
             'links': [
-                ('Product Owner Paris (FR)', 'https://www.welcometothejungle.com/fr/jobs?query=product+owner&aroundQuery=Paris')
+                (f'Product Owner {LOCATION_CITY} (FR)', 'https://www.welcometothejungle.com/fr/jobs?query=product+owner&aroundQuery=Paris')
             ]
         }
     ]
@@ -313,7 +321,7 @@ def create_job_report():
         <h1>🎯 Senior Jobs (8+ Years)<span class="experience-badge">COMPACT</span></h1>
 
         <div class="header-info">
-            <p>📅 {datetime.now().strftime('%Y-%m-%d %H:%M')} | 📊 {len(all_companies)} Companies | 🔍 Paris/France | Senior Java (8+ yrs) | ⬜ NC: {not_contacted} | ✅ Applied: {applied} |⏸️ No Jobs Available: {nothing}|🕐 Review: {under_review} | ❌ Rejected: {rejected}</p>
+            <p>📅 {datetime.now().strftime('%Y-%m-%d %H:%M')} | 📊 {len(all_companies)} Companies | 🔍 {LOCATION_CITY}/{LOCATION_COUNTRY} | Senior Java (8+ yrs) | ⬜ NC: {not_contacted} | ✅ Applied: {applied} |⏸️ No Jobs Available: {nothing}|🕐 Review: {under_review} | ❌ Rejected: {rejected}</p>
              <p>NOTE: ALL JOBS WHICH ARE NOT AVAILABLE OR NOTHING IN STATUS TRACKER LIST.XLSX goes as  No Jobs Available under Senior Java (8+ yrs)  </p>
         </div>
 """
