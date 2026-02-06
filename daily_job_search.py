@@ -11,6 +11,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 import openpyxl
+import re
 
 # ============= CONFIGURATION =============
 # Import configuration from config.py (create from config.template.py)
@@ -122,15 +123,14 @@ def build_companies_by_role(tracker):
         # Ensure the category exists in the dict
         companies_by_role.setdefault(category, {})
 
+        role_link = data.get('role_link', '')
+
         # Create/update this company entry under that category
         companies_by_role[category][company] = {
-            # Mark that this came from the Excel tracker
             'industry': 'Tracker',
-            # Show the raw role from Excel, or "Various" if empty
             'roles': excel_role or 'Various',
-            # Generic experience text (you can refine later if needed)
-            'experience': 'See details',
-            # Default links: Google search + LinkedIn jobs + WTTJ jobs for this company
+            'role_link': role_link,
+            'experience': '',
             'links': [
                 ('Search', f'https://www.google.com/search?q={company.replace(" ", "+")}+careers+paris'),
                 ('LinkedIn', f'https://www.linkedin.com/company/{company.lower().replace(" ", "-")}/jobs'),
@@ -145,26 +145,61 @@ def build_companies_by_role(tracker):
 
 # ========================================================
 
+def parse_hr_contacts(cell):
+    """Parse HR contact cell into list of (name, url) tuples.
+    Handles: plain text with hyperlink, HYPERLINK formulas, or raw text."""
+    contacts = []
+    if cell is None or cell.value is None:
+        return contacts
+
+    value = str(cell.value)
+
+    # Case 1: HYPERLINK formula(s) like =HYPERLINK("url","name") & CHAR(10) & ...
+    if value.startswith('='):
+        matches = re.findall(r'HYPERLINK\("([^"]+)","([^"]+)"\)', value)
+        for url, name in matches:
+            contacts.append((name, url))
+    # Case 2: Plain text with a cell-level hyperlink
+    elif cell.hyperlink:
+        contacts.append((value, cell.hyperlink.target))
+    # Case 3: Raw text (no links)
+    elif value.strip():
+        contacts.append((value.strip(), ''))
+
+    return contacts
+
+
 def read_application_tracker():
     """Read Excel tracker - called DAILY to get latest updates"""
     try:
-        wb = openpyxl.load_workbook(TRACKER_FILE, read_only=True, data_only=True)
+        # Use read_only=False to access hyperlinks and formulas
+        wb = openpyxl.load_workbook(TRACKER_FILE, data_only=False)
         ws = wb.active
 
         tracker = {}
-        for i, row in enumerate(ws.iter_rows(values_only=True)):
+        for i, row in enumerate(ws.iter_rows()):
             if i == 0:
                 continue
 
-            company = row[0]
-            role = row[1]
-            status = row[3]
+            company = row[0].value
+            role = row[1].value
+            role_link = row[2].value if len(row) > 2 else None
+            # Also check for cell-level hyperlink on role link column
+            if not role_link and len(row) > 2 and row[2].hyperlink:
+                role_link = row[2].hyperlink.target
+            status = row[3].value
+            hr_cell = row[4] if len(row) > 4 else None
 
             if company and 'Program/Product' not in str(company):
                 company_clean = str(company).strip()
+                hr_contacts = parse_hr_contacts(hr_cell)
+                role_link_str = str(role_link).strip() if role_link else ''
+                # Only keep if it looks like a URL
+                if role_link_str and not role_link_str.startswith('http'):
+                    role_link_str = ''
 
                 if company_clean not in tracker:
-                    tracker[company_clean] = {'role': role, 'status': status}
+                    tracker[company_clean] = {'role': role, 'role_link': role_link_str, 'status': status, 'hr_contacts': hr_contacts}
                 else:
                     # Deduplicate - prioritize better status
                     current_status = str(tracker[company_clean].get('status', '')).lower()
@@ -173,7 +208,13 @@ def read_application_tracker():
                     current_p = max([v for k, v in priority.items() if k in current_status] or [0])
                     new_p = max([v for k, v in priority.items() if k in new_status] or [0])
                     if new_p > current_p:
-                        tracker[company_clean] = {'role': role, 'status': status}
+                        tracker[company_clean] = {'role': role, 'role_link': role_link_str, 'status': status, 'hr_contacts': hr_contacts}
+                    # Merge HR contacts if current entry has none
+                    if not tracker[company_clean].get('hr_contacts') and hr_contacts:
+                        tracker[company_clean]['hr_contacts'] = hr_contacts
+                    # Merge role_link if current entry has none
+                    if not tracker[company_clean].get('role_link') and role_link_str:
+                        tracker[company_clean]['role_link'] = role_link_str
 
         wb.close()
         print(f"Tracker updated from Excel: {len(tracker)} companies")
@@ -265,7 +306,8 @@ def create_job_report():
                 companies_merged[category][company] = {
                     'industry': 'Tracker',
                     'roles': excel_role if excel_role else 'Various',
-                    'experience': 'See details',
+                    'role_link': data.get('role_link', ''),
+                    'experience': '',
                     'links': [
                         ('Search', f'https://www.google.com/search?q={company.replace(" ", "+")}+careers+paris'),
                         ('LinkedIn', f'https://www.linkedin.com/company/{company.lower().replace(" ", "-")}/jobs')
@@ -315,6 +357,8 @@ def create_job_report():
             .summary {{ background: #d4edda; padding: 5px 8px; border-radius: 3px; margin: 5px 0; font-size: 11px; }}
             .note {{ font-size: 10px; color: #6c757d; }}
             .exp-note {{ font-size: 9px; color: #e74c3c; font-weight: bold; }}
+            .hr-contact a {{ color: #8e44ad; text-decoration: none; font-size: 10px; display: block; }}
+            .hr-contact a:hover {{ text-decoration: underline; }}
         </style>
     </head>
     <body>
@@ -333,10 +377,11 @@ def create_job_report():
         <table>
             <thead>
                 <tr>
-                    <th width="16%">Company</th>
-                    <th width="10%">Status</th>
-                    <th width="30%">Role</th>
-                    <th width="44%">Links</th>
+                    <th width="14%">Company</th>
+                    <th width="8%">Status</th>
+                    <th width="22%">Role</th>
+                    <th width="16%">HR Contact</th>
+                    <th width="40%">Links</th>
                 </tr>
             </thead>
             <tbody>
@@ -370,14 +415,32 @@ def create_job_report():
                 current_section = 'rejected'
 
             if section_name:
-                report += f'                <tr class="section-header"><td colspan="4">{section_name}</td></tr>\n'
+                report += f'                <tr class="section-header"><td colspan="5">{section_name}</td></tr>\n'
 
             # Company row
             is_new = company_name not in tracker
             industry = company_info.get('industry', '')
             roles = company_info.get('roles', '')
-            experience = company_info.get('experience', '')
+            role_link = company_info.get('role_link', '') or tracker.get(company_name, {}).get('role_link', '')
             links = company_info.get('links', [])
+
+            # Make role text clickable if we have a role link
+            if role_link:
+                role_html = f'<a href="{role_link}" style="color: #2c3e50; text-decoration: underline;">{roles}</a>'
+            else:
+                role_html = roles
+
+            # Get HR contacts for this company
+            hr_contacts = tracker.get(company_name, {}).get('hr_contacts', [])
+            hr_html = ''
+            if hr_contacts:
+                for name, url in hr_contacts:
+                    if url:
+                        hr_html += f'<a href="{url}">{name}</a>'
+                    else:
+                        hr_html += f'{name}'
+            else:
+                hr_html = '<span class="note">-</span>'
 
             report += f"""                <tr>
                     <td>
@@ -386,9 +449,9 @@ def create_job_report():
                     </td>
                     <td>{get_status_compact(company_name, tracker)}</td>
                     <td>
-                        <div style="font-size: 11px;">{roles}</div>
-                        <div class="exp-note">{experience}</div>
+                        <div style="font-size: 11px;">{role_html}</div>
                     </td>
+                    <td class="hr-contact">{hr_html}</td>
                     <td class="links">
 """
             for link_text, link_url in links:

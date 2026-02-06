@@ -1,6 +1,13 @@
 # Private configuration
 config.py
 
+# HR contacts data (contains real names & LinkedIn URLs)
+update_hr_contacts.py
+
+# Resume (NEVER commit this!)
+resume_nottoputongithub*
+*resume*
+
 # Excel tracker with private data
 *.xlsx
 # But DO track the template
