@@ -14,6 +14,17 @@ An automated daily job search system that emails you curated senior-level job op
 - 💼 **Compact Format** - See more companies at a glance
 - ⚡ **Windows Automation** - Runs automatically via Task Scheduler
 
+## Email Report Preview
+
+To see what the daily email looks like, download and open [`sample_report.html`](sample_report.html) in your browser. All data in the sample is fictional.
+
+**Report includes:**
+- Companies grouped by status (Not Contacted / Review / Applied / No Jobs / Rejected)
+- **Role** column with clickable links to the job posting
+- **HR Contact** column with clickable LinkedIn profiles (in purple)
+- **Links** column with quick search links (Google, LinkedIn, WTTJ)
+- Platform aggregator links (Glassdoor, LinkedIn, etc.) under each role category
+
 ## What You Get
 
 ### Roles Tracked
