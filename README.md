@@ -8,7 +8,8 @@ An automated daily job search system that emails you curated senior-level job op
 - 🎓 **Senior Roles Focus** - Targets positions requiring 8+ years experience
 - 📊 **Excel Integration** - Reads and syncs with your application tracker
 - 🗂️ **Smart Organization** - Groups companies by role → status
-- 🔗 **Direct Links** - Apply links for each company
+- 🔗 **Clickable Role Links** - Role names link directly to the job posting
+- 👤 **HR Contact Column** - Shows recruiter/TA contacts with clickable LinkedIn profiles
 - 🔍 **Platform Aggregators** - Curated search links (Glassdoor, LinkedIn, etc.)
 - 💼 **Compact Format** - See more companies at a glance
 - ⚡ **Windows Automation** - Runs automatically via Task Scheduler
@@ -121,16 +122,16 @@ Check your email - you should receive the job search report!
 
 Format your Excel file like this:
 
-| Company | Role | Role link | status of application |
-|---------|------|-----------|----------------------|
-| abc | Backend general specialist | https://... | In progress |
-| xyz | Engineering Manager Java | https://... | Rejected |
-| hogwarts | Senior Software Engineer | https://... | done |
+| Company | Role | Role link | status of application | potentialHR contact | Other comments |
+|---------|------|-----------|----------------------|---------------------|----------------|
+| abc | Backend general specialist | https://... | In progress | Jane Smith | |
+| xyz | Engineering Manager Java | https://... | Rejected | | |
+| hogwarts | Senior Software Engineer | https://... | done | John Doe | |
 
 **Required Columns:**
 - **Column A**: Company name (required)
 - **Column B**: Role title (can be empty, script will use "Various")
-- **Column C**: Application link (optional)
+- **Column C**: Application/job posting link (clickable in email report)
 - **Column D**: Status - use one of these:
   - `"done"` or `"applied"` → Shows as ✅ Applied
   - `"In progress"` or `"Under Review"` → Shows as 🕐 Review
@@ -138,35 +139,57 @@ Format your Excel file like this:
   - `"Not available"` or `"Nothing to apply"` → Shows as ⏸️ No Jobs Available
   - Empty or anything else → Shows as ⬜ Not Contacted
 
+**Optional Columns:**
+- **Column E**: potentialHR contact - recruiter/TA names with LinkedIn hyperlinks (see HR Contacts below)
+- **Column F**: Other comments
+
 **Tips:**
 - You can add section headers (e.g., "Product Owner Roles") in Column A
 - Use strikethrough formatting on rejected companies (the script will detect it)
 - The script automatically categorizes roles based on keywords in Column B
 - Close Excel file before running the script to avoid permission errors
 
+## HR Contact Lookup
+
+The system supports a **potentialHR contact** column in your Excel tracker, showing recruiter/talent acquisition contacts for each company with clickable LinkedIn links in the email report.
+
+### How to Populate HR Contacts
+
+1. Copy `update_hr_contacts.template.py` to `update_hr_contacts.py`
+2. Research recruiters for your target companies (search LinkedIn for `"CompanyName" "talent acquisition" OR "recruiter" YourCity site:linkedin.com/in`)
+3. Fill in the `HR_CONTACTS` dictionary with `(name, linkedin_url)` tuples
+4. Run: `python update_hr_contacts.py`
+
+This adds a **potentialHR contact** column to your Excel with clickable names. The daily email report will then show these contacts alongside each company.
+
+> **Note:** `update_hr_contacts.py` is gitignored because it contains real contact data.
+
 ## File Structure
 
 ```
 claude-job-agent/
-├── daily_job_search.py          # Main Python script
-├── config.template.py            # Configuration template (copy to config.py)
-├── config.py                     # Your private configuration (gitignored)
-├── run_daily_job_search.bat     # Windows batch file for scheduler
-├── setup_task_admin.bat         # Easy setup for scheduled task
-├── setup_scheduled_task.ps1     # PowerShell setup script
-├── SETUP_INSTRUCTIONS.txt       # Detailed setup guide
-├── job_search_log.txt           # Execution log (auto-generated)
-├── .gitignore                   # Excludes private files from Git
-└── README.md                    # This file
+├── daily_job_search.py                # Main Python script
+├── config.template.py                  # Configuration template (copy to config.py)
+├── config.py                           # Your private configuration (gitignored)
+├── update_hr_contacts.template.py      # HR contacts updater template
+├── update_hr_contacts.py               # Your HR contacts data (gitignored)
+├── run_daily_job_search.bat           # Windows batch file for scheduler
+├── setup_task_admin.bat               # Easy setup for scheduled task
+├── setup_scheduled_task.ps1           # PowerShell setup script
+├── SETUP_INSTRUCTIONS.txt             # Detailed setup guide
+├── tracker_template.xlsx              # Excel tracker template
+├── job_search_log.txt                 # Execution log (auto-generated)
+├── .gitignore                         # Excludes private files from Git
+└── README.md                          # This file
 ```
 
 ## How It Works
 
 1. **Daily Trigger** - Windows Task Scheduler runs the batch file at 10:00 AM
-2. **Read Excel** - Script loads your application tracker for latest statuses
+2. **Read Excel** - Script loads your application tracker for latest statuses, role links, and HR contacts
 3. **Merge Data** - Combines pre-defined companies + Excel tracker companies
 4. **Organize** - Groups by Role → Status (Not Contacted → Review → Applied → Rejected)
-5. **Generate HTML** - Creates a compact, styled email report
+5. **Generate HTML** - Creates a compact, styled email report with clickable role links and HR contacts
 6. **Send Email** - Sends via Gmail SMTP to your inbox
 
 ## Customization
@@ -290,6 +313,7 @@ If you'd like to improve this project:
 
 ⚠️ **IMPORTANT:**
 - Never commit `config.py` to Git (it's in `.gitignore`)
+- Never commit `update_hr_contacts.py` to Git (contains real recruiter names/LinkedIn URLs)
 - Keep your Gmail App Password secure
 - Don't share your Excel tracker if it contains private data
 
