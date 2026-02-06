@@ -151,16 +151,32 @@ Format your Excel file like this:
 
 ## HR Contact Lookup
 
-The system supports a **potentialHR contact** column in your Excel tracker, showing recruiter/talent acquisition contacts for each company with clickable LinkedIn links in the email report.
+The system supports a **potentialHR contact** column (Column E) in your Excel tracker, showing recruiter/talent acquisition contacts for each company with clickable LinkedIn links in the email report.
 
 ### How to Populate HR Contacts
+
+**Option A: Bulk populate with script (recommended for first setup)**
 
 1. Copy `update_hr_contacts.template.py` to `update_hr_contacts.py`
 2. Research recruiters for your target companies (search LinkedIn for `"CompanyName" "talent acquisition" OR "recruiter" YourCity site:linkedin.com/in`)
 3. Fill in the `HR_CONTACTS` dictionary with `(name, linkedin_url)` tuples
 4. Run: `python update_hr_contacts.py`
 
-This adds a **potentialHR contact** column to your Excel with clickable names. The daily email report will then show these contacts alongside each company.
+This adds a **potentialHR contact** column to your Excel with clickable names.
+
+**Option B: Add contacts directly in Excel**
+
+Simply type recruiter names into Column E of your Excel tracker. To make them clickable:
+- Select the cell, right-click → **Link** → paste the LinkedIn profile URL
+- The name will appear as a clickable link in the email report
+
+### Auto-Update Behavior
+
+The daily email script reads the potentialHR contact column **fresh from your Excel every time it runs**. This means:
+- Any contacts you add or edit in Column E are automatically included in the next email
+- Deleted contacts are removed from the next email
+- New company rows with HR contacts are picked up automatically
+- **No need to re-run `update_hr_contacts.py`** — just maintain contacts directly in Excel going forward
 
 > **Note:** `update_hr_contacts.py` is gitignored because it contains real contact data.
 
