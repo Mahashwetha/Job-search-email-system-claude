@@ -175,7 +175,9 @@ The system supports a **potentialHR contact** column (Column E) in your Excel tr
 
 This adds a **potentialHR contact** column to your Excel with clickable names.
 
-**Option B: Add contacts directly in Excel**
+> **Important:** Web-scraped contacts are **suggestions only** — they may be outdated, in the wrong location, or no longer at the company. Always verify on LinkedIn before reaching out.
+
+**Option B: Add contacts directly in Excel (recommended after verification)**
 
 Simply type recruiter names into Column E of your Excel tracker. To make them clickable:
 - Select the cell, right-click → **Link** → paste the LinkedIn profile URL
