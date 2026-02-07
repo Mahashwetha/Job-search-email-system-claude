@@ -12,6 +12,9 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 import openpyxl
 import re
+import shutil
+import tempfile
+import os
 
 # ============= CONFIGURATION =============
 # Import configuration from config.py (create from config.template.py)
@@ -170,10 +173,19 @@ def parse_hr_contacts(cell):
 
 
 def read_application_tracker():
-    """Read Excel tracker - called DAILY to get latest updates"""
+    """Read Excel tracker - called DAILY to get latest updates.
+    If the file is locked (e.g. open in Excel), copies to a temp file first."""
+    temp_file = None
     try:
-        # Use read_only=False to access hyperlinks and formulas
-        wb = openpyxl.load_workbook(TRACKER_FILE, data_only=False)
+        # Try reading directly first; if locked, copy to temp
+        try:
+            wb = openpyxl.load_workbook(TRACKER_FILE, data_only=False)
+        except PermissionError:
+            print("File is locked (Excel open?) - reading from temp copy...")
+            temp_fd, temp_file = tempfile.mkstemp(suffix='.xlsx')
+            os.close(temp_fd)
+            shutil.copy2(TRACKER_FILE, temp_file)
+            wb = openpyxl.load_workbook(temp_file, data_only=False)
         ws = wb.active
 
         tracker = {}
@@ -217,9 +229,13 @@ def read_application_tracker():
                         tracker[company_clean]['role_link'] = role_link_str
 
         wb.close()
+        if temp_file and os.path.exists(temp_file):
+            os.remove(temp_file)
         print(f"Tracker updated from Excel: {len(tracker)} companies")
         return tracker
     except Exception as e:
+        if temp_file and os.path.exists(temp_file):
+            os.remove(temp_file)
         print(f"Warning: Could not read tracker: {e}")
         return {}
 
