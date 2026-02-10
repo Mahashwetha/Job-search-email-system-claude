@@ -159,9 +159,18 @@ def parse_hr_contacts(cell):
 
     # Case 1: HYPERLINK formula(s) like =HYPERLINK("url","name") & CHAR(10) & ...
     if value.startswith('='):
-        matches = re.findall(r'HYPERLINK\("([^"]+)","([^"]+)"\)', value)
-        for url, name in matches:
-            contacts.append((name, url))
+        # Split on CHAR(10) separator to get each part
+        parts = re.split(r'\s*&\s*CHAR\(10\)\s*&\s*', value.lstrip('='))
+        for part in parts:
+            part = part.strip()
+            hlink = re.match(r'HYPERLINK\("([^"]+)","([^"]+)"\)', part)
+            if hlink:
+                contacts.append((hlink.group(2), hlink.group(1)))
+            else:
+                # Plain text part like "alice"
+                text = part.strip('"')
+                if text:
+                    contacts.append((text, ''))
     # Case 2: Plain text with a cell-level hyperlink
     elif cell.hyperlink:
         contacts.append((value, cell.hyperlink.target))
