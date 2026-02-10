@@ -547,7 +547,11 @@ def send_email(html_content):
         return False
 
 def main():
-    """Main - Reads Excel tracker DAILY"""
+    """Main - Reads Excel tracker DAILY (skips Friday)"""
+    if datetime.now().weekday() == 4:  # 4 = Friday
+        print("Friday - skipping email send")
+        return
+
     print("Reading tracker from Excel (daily update)...")
     tracker = read_application_tracker()
     print(f"Found {len(tracker)} companies in tracker")
