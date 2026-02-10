@@ -177,19 +177,33 @@ This adds a **potentialHR contact** column to your Excel with clickable names.
 
 > **Important:** Web-scraped contacts are **suggestions only** — they may be outdated, in the wrong location, or no longer at the company. Always verify on LinkedIn before reaching out.
 
-**Option B: Add contacts directly in Excel (recommended after verification)**
+**Option B: Add contacts directly in Excel**
 
 Simply type recruiter names into Column E of your Excel tracker. To make them clickable:
 - Select the cell, right-click → **Link** → paste the LinkedIn profile URL
 - The name will appear as a clickable link in the email report
 
-### Auto-Update Behavior
+### Append-Only Workflow
+
+The `update_hr_contacts.py` script uses **append-only** logic — it reads existing cell content first and only adds contacts that aren't already there. This means you can freely mix manual Excel edits with script updates:
+
+| Action | What to do |
+|--------|------------|
+| **Add a contact in Excel** | Just type it in Column E — the script will never overwrite it |
+| **Add a new company row** | Just add it in Excel — the script leaves unknown companies alone |
+| **Script finds new contacts** | New contacts are added to the `HR_CONTACTS` dict, then the script appends only the new ones |
+| **Remove a contact** | Delete from Excel **and** remove from the `HR_CONTACTS` dict in `update_hr_contacts.py` |
+
+The script is **idempotent** — running it multiple times won't create duplicates. Only truly new contacts get appended.
+
+> **Note:** Removal is the only case where you need to update both places (Excel + script). For everything else, your manual Excel edits are always preserved.
+
+### Auto-Update in Daily Email
 
 The daily email script reads the potentialHR contact column **fresh from your Excel every time it runs**. This means:
 - Any contacts you add or edit in Column E are automatically included in the next email
 - Deleted contacts are removed from the next email
 - New company rows with HR contacts are picked up automatically
-- **No need to re-run `update_hr_contacts.py`** — just maintain contacts directly in Excel going forward
 
 > **Note:** `update_hr_contacts.py` is gitignored because it contains real contact data.
 
@@ -360,4 +374,4 @@ For issues or questions:
 
 ---
 
-**Built with Claude Code** 🤖 | **Last Updated:** 2026-02-05
+**Built with Claude Code** 🤖 | **Last Updated:** 2026-02-10
