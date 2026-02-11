@@ -516,7 +516,7 @@ def create_job_report():
 
     report += f"""
         <div class="footer">
-            <p>📊 {len(all_companies)} companies | ⬜ {not_contacted} NC | ✅ {applied} Applied | 🕐 {under_review} Review | ❌ {rejected} Rejected | 🔄 Next: Tomorrow 12:00 CET</p>
+            <p>📊 {len(all_companies)} companies | ⬜ {not_contacted} NC | ✅ {applied} Applied | 🕐 {under_review} Review | ❌ {rejected} Rejected | 🔄 Next: Tomorrow 11:00 CET</p>
         </div>
     </body>
     </html>

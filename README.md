@@ -4,7 +4,7 @@ An automated daily job search system that emails you curated senior-level job op
 
 ## Features
 
-- 📧 **Daily Email Reports** - Automated emails at 10:00 AM CET
+- 📧 **Daily Email Reports** - Automated emails at 11:00 AM CET
 - 🎓 **Senior Roles Focus** - Targets positions requiring 8+ years experience
 - 📊 **Excel Integration** - Reads and syncs with your application tracker
 - 🗂️ **Smart Organization** - Groups companies by role → status
@@ -101,7 +101,7 @@ python daily_job_search.py
 
 Check your email - you should receive the job search report!
 
-### 5. Schedule Daily Emails (10:00 AM)
+### 5. Schedule Daily Emails (11:00 AM)
 
 **Easy Setup (Recommended):**
 
@@ -247,7 +247,7 @@ claude-job-agent/
 
 ## How It Works
 
-1. **Daily Trigger** - Windows Task Scheduler runs the batch file at 10:00 AM
+1. **Daily Trigger** - Windows Task Scheduler runs the batch file at 11:00 AM
 2. **Read Excel** - Script loads your application tracker for latest statuses, role links, and HR contacts
 3. **Merge Data** - Combines pre-defined companies + Excel tracker companies
 4. **Organize** - Groups by Role → Status (Not Contacted → Review → Applied → Rejected)
@@ -293,7 +293,7 @@ If you want to customize the actual URLs for your location:
 
 ### Change Email Time
 
-To change from 10:00 AM to another time:
+To change from 11:00 AM to another time:
 
 1. Delete existing task: `schtasks /delete /tn "DailyJobSearch" /f`
 2. Run `setup_task_admin.bat` again after editing the time in the file
@@ -338,7 +338,7 @@ This happens when Excel file is open. **Solution:**
 - ✅ Verify task is enabled in Task Scheduler (`taskschd.msc`)
 - ✅ Run `run_daily_job_search.bat` manually to test
 - ✅ Check log file: `job_search_log.txt`
-- ✅ Make sure computer is ON at 10:00 AM
+- ✅ Make sure computer is ON at 11:00 AM
 
 ### Script Errors
 

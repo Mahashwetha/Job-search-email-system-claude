@@ -1,6 +1,6 @@
 @echo off
 REM =====================================================
-REM Daily Job Search Agent - Runs at 10:00 AM CET
+REM Daily Job Search Agent - Runs at 11:00 AM CET
 REM Reads Excel tracker and sends compact email
 REM =====================================================
 

@@ -15,7 +15,7 @@ schtasks /create ^
   /tn "DailyJobSearch" ^
   /tr "%~dp0run_daily_job_search.bat" ^
   /sc daily ^
-  /st 10:00 ^
+  /st 11:00 ^
   /rl HIGHEST ^
   /f
 
@@ -25,10 +25,10 @@ if %ERRORLEVEL% EQU 0 (
     echo SUCCESS! Scheduled task created.
     echo ========================================
     echo Task Name: DailyJobSearch
-    echo Run Time: Daily at 10:00 AM
+    echo Run Time: Daily at 11:00 AM
     echo Script: run_daily_job_search.bat
     echo.
-    echo Next run: Tomorrow at 10:00 AM
+    echo Next run: Tomorrow at 11:00 AM
     echo.
     echo To verify: Press Win+R, type taskschd.msc
     echo ========================================

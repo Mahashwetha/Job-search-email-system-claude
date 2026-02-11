@@ -29,25 +29,28 @@ _ORIGIN = USER_PROFILE.get('origin_country', '')
 # --- Templates (all personal info comes from USER_PROFILE in config.py) ---
 
 SHORT_SINGLE_ROLE = (
-    "Hi {first_name}, I've applied for the {role} role at {company}.\n"
-    "As {background} with {years}+ yrs in {domain}, "
-    "could you help check on my application?\n"
-    "You can find my professional background here: {linkedin}"
+    "Hi {first_name}, I applied for the {role} role at {company}.\n"
+    "With {years}+ yrs in {domain}, I believe I'm a strong fit.\n"
+    "Could you check on my application or direct me to the right person?\n"
+    "{linkedin}\n"
+    "Thanks & regards, {user_name}"
 )
 
 SHORT_MULTI_ROLE_ALL = (
-    "Hi {first_name}, I've applied for the roles {roles_csv} at {company}.\n"
-    "As {background} with {years}+ yrs in {domain}, "
-    "could you help check on my application?\n"
-    "You can find my professional background here: {linkedin}"
+    "Hi {first_name}, I applied for {roles_csv} at {company}.\n"
+    "With {years}+ yrs in {domain}, I believe I'm a strong fit.\n"
+    "Could you check on my application or direct me to the right person?\n"
+    "{linkedin}\n"
+    "Thanks & regards, {user_name}"
 )
 
 SHORT_MULTI_ROLE_SUMMARY = (
-    "Hi {first_name}, I've applied for {count} roles at {company} "
+    "Hi {first_name}, I applied for {count} roles at {company} "
     "including {first_role}.\n"
-    "As {background} with {years}+ yrs in {domain}, "
-    "could you help check on my application?\n"
-    "You can find my professional background here: {linkedin}"
+    "With {years}+ yrs in {domain}, could you check on my application "
+    "or direct me to the right person?\n"
+    "{linkedin}\n"
+    "Thanks & regards, {user_name}"
 )
 
 LONG_TEMPLATE = (
@@ -57,9 +60,9 @@ LONG_TEMPLATE = (
     "With {years}+ years of experience in {domain}, I am confident my profile "
     "aligns well with what {{company}} is looking for.\n\n"
     "You can find my professional background here: {linkedin}\n\n"
-    "I would be grateful if you could kindly check on the status of my application, "
-    "as I believe my profile is a strong match. If you are not the right person for "
-    "these roles, I would appreciate being directed to the appropriate contact.\n\n"
+    "I would be grateful if you could kindly check on the status of my application. "
+    "If this does not fall under your purview, I would appreciate being redirected "
+    "to the right person who handles these roles.\n\n"
     "Thank you for your time and consideration.\n\n"
     "Best regards,\n"
     "{user_name}"
@@ -181,6 +184,7 @@ def _draft_short_message(company, roles, contact_name):
         'background': _BACKGROUND,
         'domain': _DOMAIN,
         'linkedin': LINKEDIN_URL,
+        'user_name': _NAME,
     }
 
     if len(roles) == 1:

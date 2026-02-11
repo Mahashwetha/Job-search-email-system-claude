@@ -7,7 +7,7 @@ Write-Host "Setting up Daily Job Search scheduled task..." -ForegroundColor Cyan
 $taskName = "DailyJobSearch"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $scriptPath = Join-Path $scriptDir "run_daily_job_search.bat"
-$time = "10:00"
+$time = "11:00"
 
 # Delete existing task if it exists
 $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -35,7 +35,7 @@ Register-ScheduledTask `
     -Action $action `
     -Trigger $trigger `
     -Settings $settings `
-    -Description "Daily job search email - reads Excel tracker and sends compact email at 10:00 AM CET" `
+    -Description "Daily job search email - reads Excel tracker and sends compact email at 11:00 AM CET" `
     -User $env:USERNAME `
     -RunLevel Highest
 

@@ -23,7 +23,7 @@ OPTION 3: Manual Setup via Task Scheduler
 1. Press Win + R, type: taskschd.msc
 2. Click "Create Basic Task"
 3. Name: DailyJobSearch
-4. Trigger: Daily at 10:00 AM
+4. Trigger: Daily at 11:00 AM
 5. Action: Start a program
 6. Program: Browse to your "run_daily_job_search.bat" file
 7. Click Finish
@@ -39,7 +39,7 @@ VERIFY IT WORKS
 ========================================
 MANUAL RUN (Anytime)
 ========================================
-If you want to run it manually without waiting for 10:00 AM:
+If you want to run it manually without waiting for 11:00 AM:
 
 Option A: Double-click run_daily_job_search.bat
 Option B: Run in terminal:
@@ -49,7 +49,7 @@ Option B: Run in terminal:
 ========================================
 TROUBLESHOOTING
 ========================================
-- Make sure your computer is ON at 10:00 AM
+- Make sure your computer is ON at 11:00 AM
 - Check the log file: job_search_log.txt
 - Verify Excel tracker path is correct in config.py
 - Email credentials in config.py should be valid
