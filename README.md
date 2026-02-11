@@ -207,11 +207,30 @@ The daily email script reads the potentialHR contact column **fresh from your Ex
 
 > **Note:** `update_hr_contacts.py` is gitignored because it contains real contact data.
 
+## Outreach Drafter
+
+After sending the daily email, the system automatically generates LinkedIn outreach drafts for all applied companies (status = "done") that have HR contacts.
+
+**Features:**
+- **Short messages** (max 300 chars) per HR contact — for LinkedIn connection requests
+- **Long messages** per company — for InMail or email
+- **Skip logic** — won't regenerate drafts if roles haven't changed
+- **Stable filenames** — one file per company, overwritten only when roles change
+- All personal info comes from `USER_PROFILE` in `config.py` (no hardcoded data in code)
+
+**Output:** Drafts are saved to the output folder configured in `outreach_drafter.py`.
+
+**Standalone run:**
+```bash
+python outreach_drafter.py
+```
+
 ## File Structure
 
 ```
 claude-job-agent/
-├── daily_job_search.py                # Main Python script
+├── daily_job_search.py                # Main script (email + outreach)
+├── outreach_drafter.py                # LinkedIn outreach draft generator
 ├── config.template.py                  # Configuration template (copy to config.py)
 ├── config.py                           # Your private configuration (gitignored)
 ├── update_hr_contacts.template.py      # HR contacts updater template

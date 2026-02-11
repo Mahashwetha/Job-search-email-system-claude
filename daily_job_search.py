@@ -562,5 +562,9 @@ def main():
     print("Sending email...")
     send_email(report_html)
 
+    # Generate outreach drafts for applied companies
+    from outreach_drafter import run_outreach
+    run_outreach()
+
 if __name__ == "__main__":
     main()
