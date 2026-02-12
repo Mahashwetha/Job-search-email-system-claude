@@ -4,9 +4,12 @@ config.py
 # HR contacts data (contains real names & LinkedIn URLs)
 update_hr_contacts.py
 
-# Resume (NEVER commit this!)
+# Resume files (NEVER commit actual resumes!)
 resume_nottoputongithub*
-*resume*
+resume/
+resume_adjusted/
+# But DO track the resume tailor script
+!resume_tailor.py
 
 # Excel tracker with private data
 *.xlsx

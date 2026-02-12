@@ -566,5 +566,9 @@ def main():
     from outreach_drafter import run_outreach
     run_outreach()
 
+    # Generate tailored resumes for applied companies
+    from resume_tailor import run_tailor
+    run_tailor()
+
 if __name__ == "__main__":
     main()

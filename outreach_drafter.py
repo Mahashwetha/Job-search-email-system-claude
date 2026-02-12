@@ -32,7 +32,7 @@ SHORT_SINGLE_ROLE = (
     "Hi {first_name}, I applied for the {role} role at {company}.\n"
     "With {years}+ yrs in {domain}, I believe I'm a strong fit.\n"
     "Could you check on my application or direct me to the right person?\n"
-    "{linkedin}\n"
+    "My Professional background:{linkedin}\n"
     "Thanks & regards, {user_name}"
 )
 
@@ -40,7 +40,7 @@ SHORT_MULTI_ROLE_ALL = (
     "Hi {first_name}, I applied for {roles_csv} at {company}.\n"
     "With {years}+ yrs in {domain}, I believe I'm a strong fit.\n"
     "Could you check on my application or direct me to the right person?\n"
-    "{linkedin}\n"
+    "My Professional background:{linkedin}\n"
     "Thanks & regards, {user_name}"
 )
 
@@ -49,7 +49,7 @@ SHORT_MULTI_ROLE_SUMMARY = (
     "including {first_role}.\n"
     "With {years}+ yrs in {domain}, could you check on my application "
     "or direct me to the right person?\n"
-    "{linkedin}\n"
+    "My Professional background:{linkedin}\n"
     "Thanks & regards, {user_name}"
 )
 

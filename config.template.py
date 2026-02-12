@@ -36,6 +36,16 @@ USER_PROFILE = {
     'domain_expertise': 'software development',     # Short domain, e.g. "Java/fintech"
 }
 
+# Gemini API Key (free tier) — used by resume_tailor.py
+# Get yours at: https://aistudio.google.com/apikey
+GOOGLE_API_KEY = 'your_gemini_api_key_here'
+
+# Base resume DOCX path — the master copy that gets tailored per company
+BASE_RESUME_PATH = r'C:\Path\To\Your\base_resume.docx'
+
+# Output directory for tailored resumes
+RESUME_OUTPUT_DIR = r'C:\Path\To\Your\resume_adjusted'
+
 # How to get Gmail App Password:
 # 1. Go to Google Account → Security → 2-Step Verification
 # 2. Scroll to "App passwords" at the bottom
