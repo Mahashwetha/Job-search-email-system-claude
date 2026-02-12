@@ -4,15 +4,16 @@ An automated daily job search system that emails you curated senior-level job op
 
 ## Features
 
-- 📧 **Daily Email Reports** - Automated emails at 11:00 AM CET
-- 🎓 **Senior Roles Focus** - Targets positions requiring 8+ years experience
-- 📊 **Excel Integration** - Reads and syncs with your application tracker
-- 🗂️ **Smart Organization** - Groups companies by role → status
-- 🔗 **Clickable Role Links** - Role names link directly to the job posting
-- 👤 **HR Contact Column** - Shows recruiter/TA contacts with clickable LinkedIn profiles
-- 🔍 **Platform Aggregators** - Curated search links (Glassdoor, LinkedIn, etc.)
-- 💼 **Compact Format** - See more companies at a glance
-- ⚡ **Windows Automation** - Runs automatically via Task Scheduler
+- **Daily Email Reports** - Automated emails at 11:00 AM CET
+- **Senior Roles Focus** - Targets positions requiring 8+ years experience
+- **Excel Integration** - Reads and syncs with your application tracker
+- **Smart Organization** - Groups companies by role and status
+- **Clickable Role Links** - Role names link directly to the job posting
+- **HR Contact Column** - Shows recruiter/TA contacts with clickable LinkedIn profiles
+- **Resume Tailor** - Auto-generates per-company tailored resumes using Gemini AI
+- **Outreach Drafter** - LinkedIn message drafts for applied companies
+- **Platform Aggregators** - Curated search links (Glassdoor, LinkedIn, etc.)
+- **Windows Automation** - Runs automatically via Task Scheduler
 
 ## Email Report Preview
 
@@ -62,7 +63,7 @@ This tool comes with sample job search links. **Before using:**
 ### 1. Install Python Dependencies
 
 ```bash
-pip install openpyxl
+pip install openpyxl requests beautifulsoup4 python-docx
 ```
 
 ### 2. Configure Your Settings
@@ -225,16 +226,59 @@ After sending the daily email, the system automatically generates LinkedIn outre
 python outreach_drafter.py
 ```
 
+## Resume Tailor
+
+Automatically generates per-company tailored resumes using **Gemini 2.5 Flash** (free tier, $0 cost). Runs at the end of the daily pipeline, after outreach drafts.
+
+**What it does:**
+- Reads applied companies (status = "done") with non-LinkedIn role links from the Excel tracker
+- Fetches job descriptions from those URLs (supports Workday, WelcomeToTheJungle, Salesforce, and other ATS sites via JSON-LD extraction)
+- Sends the resume + JD to Gemini to get minimal tailoring suggestions
+- Applies changes to a copy of your base DOCX resume and saves per-company files
+- Prints a bullet-point **diff summary** showing exactly what changed vs the original
+
+**Rules (hard-coded):**
+- NEVER fabricates experience — only reorders skills and adds keywords from existing experience
+- Keeps the original job title heading unchanged
+- Removes the "Open Minded" line, keeps "Open to remote/hybrid"
+- Maximum 3 bullet tweaks per resume to keep changes minimal
+
+**Setup:**
+1. Get a free Gemini API key at https://aistudio.google.com/apikey
+2. Add to `config.py`:
+   ```python
+   GOOGLE_API_KEY = 'your_gemini_api_key'
+   BASE_RESUME_PATH = r'C:\Path\To\Your\base_resume.docx'
+   RESUME_OUTPUT_DIR = r'C:\Path\To\Your\resume_adjusted'
+   ```
+3. Install dependency: `pip install google-generativeai` (optional, only needed for the SDK — the script uses the REST API directly)
+
+**Batch run (from tracker):**
+```bash
+python resume_tailor.py
+```
+
+**Single job (pass URL + company name):**
+```bash
+python resume_tailor.py "https://company.workdayjobs.com/job/..." "Company Name"
+```
+
+**Idempotent:** Existing resume files are skipped. Delete a file to regenerate it.
+
+**Output:** Tailored DOCX files saved to the configured `RESUME_OUTPUT_DIR` folder as `resume_{company_name}.docx`.
+
 ## File Structure
 
 ```
 claude-job-agent/
-├── daily_job_search.py                # Main script (email + outreach)
+├── daily_job_search.py                # Main script (email + outreach + resume tailor)
 ├── outreach_drafter.py                # LinkedIn outreach draft generator
+├── resume_tailor.py                   # Per-company resume tailoring via Gemini AI
 ├── config.template.py                  # Configuration template (copy to config.py)
 ├── config.py                           # Your private configuration (gitignored)
 ├── update_hr_contacts.template.py      # HR contacts updater template
 ├── update_hr_contacts.py               # Your HR contacts data (gitignored)
+├── resume/                             # Base resume DOCX (gitignored)
 ├── run_daily_job_search.bat           # Windows batch file for scheduler
 ├── setup_task_admin.bat               # Easy setup for scheduled task
 ├── setup_scheduled_task.ps1           # PowerShell setup script
@@ -250,9 +294,11 @@ claude-job-agent/
 1. **Daily Trigger** - Windows Task Scheduler runs the batch file at 11:00 AM
 2. **Read Excel** - Script loads your application tracker for latest statuses, role links, and HR contacts
 3. **Merge Data** - Combines pre-defined companies + Excel tracker companies
-4. **Organize** - Groups by Role → Status (Not Contacted → Review → Applied → Rejected)
+4. **Organize** - Groups by Role and Status (Not Contacted / Review / Applied / Rejected)
 5. **Generate HTML** - Creates a compact, styled email report with clickable role links and HR contacts
 6. **Send Email** - Sends via Gmail SMTP to your inbox
+7. **Outreach Drafts** - Generates LinkedIn message drafts for applied companies with HR contacts
+8. **Resume Tailor** - Generates tailored resumes for applied companies with fetchable job links
 
 ## Customization
 
@@ -393,4 +439,4 @@ For issues or questions:
 
 ---
 
-**Built with Claude Code** 🤖 | **Last Updated:** 2026-02-10
+**Built with Claude Code** | **Last Updated:** 2026-02-12
