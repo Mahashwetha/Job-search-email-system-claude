@@ -19,6 +19,7 @@ import shutil
 import sys
 import tempfile
 import time
+from datetime import datetime
 import openpyxl
 import requests
 from bs4 import BeautifulSoup
@@ -400,6 +401,49 @@ def print_diff_summary(company, diffs, output_path):
     print(f"    Output: {output_path}")
 
 
+def write_summary_file(company, role_name, url, diffs, changes, output_path):
+    """Write a markdown summary file alongside the tailored resume."""
+    summary_path = os.path.join(
+        os.path.dirname(output_path),
+        f"summary_changes_resume_{safe_company_name(company)}.md",
+    )
+    lines = [
+        f"# Resume Tailoring Summary — {company}",
+        f"",
+        f"**Role:** {role_name}",
+        f"**Job URL:** {url}",
+        f"**Resume:** {os.path.basename(output_path)}",
+        f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"",
+        f"## Changes Applied",
+        f"",
+    ]
+    if not diffs:
+        lines.append("_(no changes applied)_")
+    else:
+        for d in diffs:
+            lines.append(f"- {d}")
+
+    # Include raw Gemini suggestions for reference
+    lines.append("")
+    lines.append("## Gemini Suggestions (raw)")
+    lines.append("")
+    if changes.get('profile_tagline'):
+        lines.append(f"**Tagline:** {changes['profile_tagline']}")
+    if changes.get('skills_reorder'):
+        lines.append(f"**Skills order:** {' | '.join(changes['skills_reorder'])}")
+    if changes.get('summary_tweak'):
+        lines.append(f"**Summary:** {changes['summary_tweak']}")
+    if changes.get('bullet_tweaks'):
+        lines.append("**Bullet tweaks:**")
+        for tw in changes['bullet_tweaks']:
+            lines.append(f"  - [{tw.get('index')}] \"{tw.get('original', '')[:80]}...\" → \"{tw.get('new', '')[:80]}...\"")
+
+    with open(summary_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines) + '\n')
+    print(f"    Summary: {summary_path}")
+
+
 # ── Core tailoring logic (shared by batch + single) ─────────────────────────
 
 def _validate_config():
@@ -435,6 +479,7 @@ def tailor_one(company, role_name, url, resume_text, output_path):
     try:
         diffs = apply_tailoring(BASE_RESUME_PATH, output_path, changes)
         print_diff_summary(company, diffs, output_path)
+        write_summary_file(company, role_name, url, diffs, changes, output_path)
         return True
     except Exception as e:
         print(f"    FAILED to apply changes: {e}")
@@ -527,6 +572,12 @@ def run_single(url, company):
     success = tailor_one(company, company, url, resume_text, output_path)
     if success:
         print(f"\n  Done! Resume saved to: {output_path}")
+        # Auto-generate outreach drafts
+        try:
+            from outreach_drafter import run_outreach
+            run_outreach()
+        except Exception as e:
+            print(f"  Warning: outreach drafter failed: {e}")
     else:
         print(f"\n  Failed to generate resume for {company}")
 
