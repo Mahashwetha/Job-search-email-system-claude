@@ -265,7 +265,11 @@ python resume_tailor.py "https://company.workdayjobs.com/job/..." "Company Name"
 
 **Idempotent:** Existing resume files are skipped. Delete a file to regenerate it.
 
-**Output:** Tailored DOCX files saved to the configured `RESUME_OUTPUT_DIR` folder as `resume_{company_name}.docx`.
+**Output:**
+- Tailored DOCX: `resume_{company_name}.docx`
+- Change summary: `summary_changes_resume_{company_name}.md` — documents all changes applied (tagline, skills reorder, bullet tweaks, summary) plus raw Gemini suggestions
+
+**Auto-outreach:** When running in single mode, outreach drafts are automatically generated after a successful resume tailor (no need to run `outreach_drafter.py` separately).
 
 ## File Structure
 
@@ -439,4 +443,4 @@ For issues or questions:
 
 ---
 
-**Built with Claude Code** | **Last Updated:** 2026-02-12
+**Built with Claude Code** | **Last Updated:** 2026-02-13
