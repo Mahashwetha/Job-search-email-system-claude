@@ -52,7 +52,7 @@ RESUME_OUTPUT_DIR = r'C:\Path\To\Your\resume_adjusted'
 
 REMOTE_ROLE_KEYWORDS = [
     'java', 'backend', 'software engineer', 'senior software',
-    'full stack', 'fullstack', 'devops', 'python', 'cloud engineer',
+    'devops', 'python', 'cloud engineer', 'tech lead',
 ]
 
 REMOTE_LOCATION_INCLUDE = [
@@ -63,7 +63,8 @@ REMOTE_LOCATION_INCLUDE = [
 
 REMOTE_LOCATION_EXCLUDE = [
     'us only', 'us timezone', 'americas only', 'usa only',
-    'us-based', 'est/pst',
+    'us-based', 'est/pst', 'canada only', 'canada',
+    'north america', 'us or canada', 'usa/canada', 'na only',
 ]
 
 # How to get Gmail App Password:

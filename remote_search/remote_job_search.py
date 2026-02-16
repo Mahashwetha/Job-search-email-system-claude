@@ -35,7 +35,7 @@ except ImportError:
 
 ROLE_KEYWORDS = REMOTE_ROLE_KEYWORDS or [
     'java', 'backend', 'software engineer', 'senior software',
-    'full stack', 'fullstack', 'devops', 'python', 'cloud engineer',
+    'devops', 'python', 'cloud engineer', 'tech lead',
 ]
 
 LOCATION_INCLUDE = REMOTE_LOCATION_INCLUDE or [
@@ -45,7 +45,10 @@ LOCATION_INCLUDE = REMOTE_LOCATION_INCLUDE or [
 
 LOCATION_EXCLUDE = REMOTE_LOCATION_EXCLUDE or [
     'us only', 'us timezone', 'americas only', 'usa only',
-    'us-based', 'est/pst',
+    'us-based', 'est/pst', 'canada only', 'canada', 'north america',
+    'us or canada', 'usa/canada', 'na only',
+    'new york', 'san francisco', 'los angeles', 'seattle', 'chicago',
+    'austin', 'boston', 'denver', 'miami', 'toronto', 'vancouver',
 ]
 
 # ============= API FETCHERS =============
