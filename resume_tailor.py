@@ -364,8 +364,16 @@ def apply_tailoring(base_path, output_path, changes):
     return diffs
 
 
+def _strip_markdown(text):
+    """Remove markdown bold/italic markers that Gemini sometimes adds."""
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    text = re.sub(r'\*(.+?)\*', r'\1', text)
+    return text
+
+
 def _replace_paragraph_text(paragraph, new_text):
     """Replace paragraph text while preserving formatting of the first run."""
+    new_text = _strip_markdown(new_text)
     if not paragraph.runs:
         paragraph.text = new_text
         return
