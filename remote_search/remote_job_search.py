@@ -22,19 +22,28 @@ except ImportError:
     print("Please copy config.template.py to config.py and fill in your details.")
     exit(1)
 
-# ============= FILTERING CONFIG =============
+# Import optional remote search config from config.py, with defaults
+try:
+    from config import REMOTE_ROLE_KEYWORDS, REMOTE_LOCATION_INCLUDE, REMOTE_LOCATION_EXCLUDE
+except ImportError:
+    REMOTE_ROLE_KEYWORDS = None
+    REMOTE_LOCATION_INCLUDE = None
+    REMOTE_LOCATION_EXCLUDE = None
 
-ROLE_KEYWORDS = [
+# ============= FILTERING CONFIG =============
+# Override these in config.py to customize for your profile and location
+
+ROLE_KEYWORDS = REMOTE_ROLE_KEYWORDS or [
     'java', 'backend', 'software engineer', 'senior software',
     'full stack', 'fullstack', 'devops', 'python', 'cloud engineer',
 ]
 
-EMEA_INCLUDE = [
+LOCATION_INCLUDE = REMOTE_LOCATION_INCLUDE or [
     'worldwide', 'anywhere', 'emea', 'europe', 'eu', 'france',
     'paris', 'remote', 'global', 'uk', 'germany', 'netherlands',
 ]
 
-EMEA_EXCLUDE = [
+LOCATION_EXCLUDE = REMOTE_LOCATION_EXCLUDE or [
     'us only', 'us timezone', 'americas only', 'usa only',
     'us-based', 'est/pst',
 ]
@@ -145,11 +154,11 @@ def filter_jobs(jobs):
 
         # Exclude US-only jobs
         loc_tags = f"{location_lower} {tags_lower}"
-        if any(ex in loc_tags for ex in EMEA_EXCLUDE):
+        if any(ex in loc_tags for ex in LOCATION_EXCLUDE):
             continue
 
         # Must have an EMEA-compatible location (or be broadly remote)
-        if not any(inc in loc_tags for inc in EMEA_INCLUDE):
+        if not any(inc in loc_tags for inc in LOCATION_INCLUDE):
             continue
 
         filtered.append(job)

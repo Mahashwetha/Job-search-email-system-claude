@@ -13,16 +13,19 @@ An end-to-end automated job search pipeline that handles everything from finding
 - **Platform Aggregators** - Curated search links (Glassdoor, LinkedIn, WelcomeToTheJungle, etc.)
 - **Windows Automation** - Runs on autopilot via Task Scheduler
 
-## Email Report Preview
+## Email Previews
 
-To see what the daily email looks like, download and open [`sample_report.html`](sample_report.html) in your browser. All data in the sample is fictional.
+All data shown below is fictional.
 
-**Report includes:**
-- Companies grouped by status (Not Contacted / Review / Applied / No Jobs / Rejected)
-- **Role** column with clickable links to the job posting
-- **HR Contact** column with clickable LinkedIn profiles (in purple)
-- **Links** column with quick search links (Google, LinkedIn, WTTJ)
-- Platform aggregator links (Glassdoor, LinkedIn, etc.) under each role category
+### Daily Job Report (11:00 AM)
+![Daily Email Sample](sample_daily_email.png)
+
+Companies grouped by status with clickable role links, HR contacts (purple), and quick search links. Platform aggregator links appear under each role category.
+
+### Remote Job Scanner (every 2 days, 12:00 PM)
+![Remote Email Sample](sample_remote_email.png)
+
+EMEA-compatible remote roles from RemoteOK, Remotive, and Arbeitnow APIs, filtered by your configured role keywords and location preferences.
 
 ## What You Get
 
@@ -323,11 +326,28 @@ claude-job-agent/
 
 ### Remote Job Scanner (every 2 days, 12:00 PM)
 1. **Fetch** - Pulls listings from RemoteOK, Remotive, and Arbeitnow APIs
-2. **Filter** - Matches role keywords (java, backend, fullstack, devops, etc.) + EMEA-compatible locations
+2. **Filter** - Matches role keywords + location-compatible positions (configurable in `config.py`)
 3. **Dedup** - Removes duplicates by company+title across sources
 4. **Send Email** - Styled HTML table sorted by posted date
 
 ## Customization
+
+### Customize Remote Job Filters
+
+Edit `config.py` to match your skills and target region:
+
+```python
+REMOTE_ROLE_KEYWORDS = ['java', 'backend', 'software engineer', 'devops', 'python']
+
+REMOTE_LOCATION_INCLUDE = [
+    'worldwide', 'anywhere', 'emea', 'europe', 'remote', 'global',
+    'france', 'paris',  # ← Add your country/city
+]
+
+REMOTE_LOCATION_EXCLUDE = ['us only', 'us timezone', 'americas only']
+```
+
+If omitted, sensible defaults are used (see `config.template.py`).
 
 ### Add More Companies
 

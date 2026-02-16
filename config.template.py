@@ -46,6 +46,26 @@ BASE_RESUME_PATH = r'C:\Path\To\Your\base_resume.docx'
 # Output directory for tailored resumes
 RESUME_OUTPUT_DIR = r'C:\Path\To\Your\resume_adjusted'
 
+# ── Remote Job Search (remote_search/remote_job_search.py) ──
+# Customize these lists to match your skills and target region.
+# If omitted, defaults are used (Java/backend roles, EMEA region).
+
+REMOTE_ROLE_KEYWORDS = [
+    'java', 'backend', 'software engineer', 'senior software',
+    'full stack', 'fullstack', 'devops', 'python', 'cloud engineer',
+]
+
+REMOTE_LOCATION_INCLUDE = [
+    'worldwide', 'anywhere', 'emea', 'europe', 'eu',
+    'france', 'paris', 'remote', 'global',             # ← Add your country/city
+    'uk', 'germany', 'netherlands',
+]
+
+REMOTE_LOCATION_EXCLUDE = [
+    'us only', 'us timezone', 'americas only', 'usa only',
+    'us-based', 'est/pst',
+]
+
 # How to get Gmail App Password:
 # 1. Go to Google Account → Security → 2-Step Verification
 # 2. Scroll to "App passwords" at the bottom
