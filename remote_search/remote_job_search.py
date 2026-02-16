@@ -1,16 +1,21 @@
 """
-Remote Job Search — fetches remote-only listings from free APIs,
+Remote Job Search — fetches remote-only listings from free APIs/feeds,
 filters for EMEA-compatible roles matching user profile,
 and sends a styled HTML email every 2 days.
+
+Sources: RemoteOK, Remotive, Arbeitnow, We Work Remotely
 """
 
 import sys
 import os
+import re
 import smtplib
 import requests
+import xml.etree.ElementTree as ET
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 
 # Add parent directory to path so we can import config
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -34,13 +39,60 @@ except ImportError:
 # Override these in config.py to customize for your profile and location
 
 ROLE_KEYWORDS = REMOTE_ROLE_KEYWORDS or [
-    'java', 'backend', 'software engineer', 'senior software',
-    'devops', 'python', 'cloud engineer', 'tech lead',
+    # Primary: Java/backend (highest relevance)
+    'java', 'backend', 'back-end', 'back end',
+    'software engineer', 'senior software', 'tech lead',
+    'platform engineer', 'api engineer',
+    # Secondary: adjacent roles the user's skillset covers
+    'devops', 'python', 'cloud engineer', 'sre',
+    'site reliability', 'infrastructure engineer',
+    # AI roles (not ML/data science prerequisite)
+    'ai engineer', 'genai', 'llm engineer', 'prompt engineer',
+]
+
+# Roles to exclude even if they match keywords above
+ROLE_EXCLUDE = [
+    'data scientist', 'machine learning engineer', 'ml engineer',
+    'data engineer', 'analytics engineer', 'research scientist',
+    'frontend', 'front-end', 'front end', 'ios ', 'android ',
+    'react native', 'flutter',
+    'web developer', 'wordpress', 'php developer', 'ruby',
+    'salesforce', '.net', 'dotnet', 'c# ', 'node.js',
+    'hubspot', 'webflow', 'figma', 'shopify',
+    'account executive', 'sales ', 'marketing',
+    'full stack', 'full-stack', 'fullstack',
+    'network engineer', 'voip', 'linux admin',
+    'consultant', 'werkstudent', 'intern ',
+    'guatemala', 'latin america', 'latam',
+    'ror ', 'rails developer', 'ruby on rails',
+    'web development manager', 'manager, web',
+    'freelance', 'dataops', 'data ops',
+    'network automation',
+]
+
+# Location priority tiers for sorting (lower = shown first)
+LOCATION_PRIORITY = [
+    # Tier 0: Paris
+    (['paris'], 0),
+    # Tier 1: France
+    (['france'], 1),
+    # Tier 2: EMEA / CET timezone countries
+    (['emea', 'europe', 'eu', 'germany', 'netherlands', 'belgium',
+      'spain', 'italy', 'switzerland', 'austria', 'poland', 'czech',
+      'sweden', 'norway', 'denmark', 'portugal', 'ireland',
+      'cet', 'cest', 'central european'], 2),
+    # Tier 3: UK (GMT+0/+1, close to CET)
+    (['uk', 'united kingdom', 'london', 'britain'], 3),
+    # Tier 4: Worldwide/anywhere/remote (no specific region)
+    (['worldwide', 'anywhere', 'global', 'remote'], 4),
 ]
 
 LOCATION_INCLUDE = REMOTE_LOCATION_INCLUDE or [
     'worldwide', 'anywhere', 'emea', 'europe', 'eu', 'france',
     'paris', 'remote', 'global', 'uk', 'germany', 'netherlands',
+    'belgium', 'spain', 'italy', 'switzerland', 'austria',
+    'sweden', 'norway', 'denmark', 'portugal', 'ireland',
+    'poland', 'czech', 'united kingdom', 'london',
 ]
 
 LOCATION_EXCLUDE = REMOTE_LOCATION_EXCLUDE or [
@@ -49,6 +101,8 @@ LOCATION_EXCLUDE = REMOTE_LOCATION_EXCLUDE or [
     'us or canada', 'usa/canada', 'na only',
     'new york', 'san francisco', 'los angeles', 'seattle', 'chicago',
     'austin', 'boston', 'denver', 'miami', 'toronto', 'vancouver',
+    'asia only', 'apac only', 'india only', 'latam only',
+    'united states', 'seattle, wa', 'washington, dc',
 ]
 
 # ============= API FETCHERS =============
@@ -64,7 +118,6 @@ def fetch_remoteok():
         )
         resp.raise_for_status()
         data = resp.json()
-        # First element is metadata, skip it
         for item in data[1:]:
             jobs.append({
                 'company': item.get('company', ''),
@@ -140,10 +193,75 @@ def fetch_arbeitnow():
     return jobs
 
 
-# ============= FILTER & DEDUP =============
+def fetch_weworkremotely():
+    """Fetch jobs from We Work Remotely RSS feeds (programming + devops)."""
+    jobs = []
+    feeds = [
+        'https://weworkremotely.com/categories/remote-back-end-programming-jobs.rss',
+        'https://weworkremotely.com/categories/remote-programming-jobs.rss',
+        'https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss',
+    ]
+    seen_guids = set()
+    for feed_url in feeds:
+        try:
+            resp = requests.get(
+                feed_url,
+                headers={'User-Agent': 'RemoteJobSearch/1.0'},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            root = ET.fromstring(resp.text)
+
+            for item in root.findall('.//item'):
+                guid = item.findtext('guid', '')
+                if guid in seen_guids:
+                    continue
+                seen_guids.add(guid)
+
+                # Title format: "Company: Job Title"
+                raw_title = item.findtext('title', '')
+                if ':' in raw_title:
+                    company, title = raw_title.split(':', 1)
+                    company = company.strip()
+                    title = title.strip()
+                else:
+                    company = ''
+                    title = raw_title.strip()
+
+                region = item.findtext('region', 'Remote')
+                country = item.findtext('country', '')
+                location = region
+                if country and country not in region:
+                    location = f"{region}, {country}"
+
+                pub_date = item.findtext('pubDate', '')
+                posted = ''
+                if pub_date:
+                    try:
+                        posted = parsedate_to_datetime(pub_date).strftime('%Y-%m-%d')
+                    except Exception:
+                        posted = pub_date[:10]
+
+                jobs.append({
+                    'company': company,
+                    'title': title,
+                    'url': guid or item.findtext('link', ''),
+                    'source': 'WWR',
+                    'location': location,
+                    'tags': item.findtext('category', ''),
+                    'posted_date': posted,
+                })
+        except Exception as e:
+            print(f"  WWR error ({feed_url.split('/')[-1]}): {e}")
+
+    print(f"  WeWorkRemotely: {len(jobs)} jobs fetched")
+    return jobs
+
+
+# ============= FILTER, SORT & DEDUP =============
 
 def filter_jobs(jobs):
-    """Filter jobs by role keywords and EMEA-compatible location."""
+    """Filter jobs by role keywords, exclude irrelevant roles, and check location."""
     filtered = []
     for job in jobs:
         title_lower = job['title'].lower()
@@ -151,13 +269,28 @@ def filter_jobs(jobs):
         tags_lower = job['tags'].lower()
         search_text = f"{title_lower} {tags_lower}"
 
+        # Exclude roles that need ML/data science or are frontend
+        if any(ex in search_text for ex in ROLE_EXCLUDE):
+            continue
+
+        # Also check title for US city mentions
+        if any(city in title_lower for city in [
+            'seattle', 'new york', 'san francisco', 'los angeles',
+            'chicago', 'austin', 'boston', 'denver', 'miami',
+        ]):
+            continue
+
         # Must match at least one role keyword
         if not any(kw in search_text for kw in ROLE_KEYWORDS):
             continue
 
-        # Exclude US-only jobs
+        # Exclude specific locations (US/Canada/Asia)
         loc_tags = f"{location_lower} {tags_lower}"
         if any(ex in loc_tags for ex in LOCATION_EXCLUDE):
+            continue
+
+        # Exclude jobs with US flag emoji in location
+        if '\U0001f1fa\U0001f1f8' in job['location']:
             continue
 
         # Must have an EMEA-compatible location (or be broadly remote)
@@ -167,6 +300,20 @@ def filter_jobs(jobs):
         filtered.append(job)
 
     return filtered
+
+
+def get_location_tier(job):
+    """Return location priority tier (0=Paris, 1=France, 2=EMEA/CET, 3=UK, 4=global)."""
+    loc = job['location'].lower()
+    for keywords, tier in LOCATION_PRIORITY:
+        if any(kw in loc for kw in keywords):
+            return tier
+    return 5  # Unknown location goes last
+
+
+def sort_jobs(jobs):
+    """Sort by location tier (Paris→France→EMEA→UK→Global), then by date descending."""
+    return sorted(jobs, key=lambda j: (get_location_tier(j), j['posted_date'][::-1]))
 
 
 def dedup_jobs(jobs):
@@ -183,13 +330,22 @@ def dedup_jobs(jobs):
 
 # ============= HTML EMAIL =============
 
+TIER_LABELS = {0: 'Paris', 1: 'France', 2: 'EMEA / CET', 3: 'UK', 4: 'Global / Remote'}
+
 def build_html(jobs):
-    """Build styled HTML email with job listings."""
+    """Build styled HTML email with job listings grouped by location tier."""
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
     date_str = datetime.now().strftime('%Y-%m-%d')
 
     rows_html = ''
+    current_tier = None
     for job in jobs:
+        tier = get_location_tier(job)
+        if tier != current_tier:
+            current_tier = tier
+            label = TIER_LABELS.get(tier, 'Other')
+            rows_html += f'                <tr style="background:#e8f5e9;font-weight:bold;"><td colspan="5" style="padding:4px 6px;font-size:11px;color:#2c3e50;">📍 {label}</td></tr>\n'
+
         rows_html += f"""                <tr>
                     <td><strong>{job['company']}</strong></td>
                     <td><a href="{job['url']}" style="color: #3498db; text-decoration: underline;">{job['title']}</a></td>
@@ -202,6 +358,7 @@ def build_html(jobs):
     if not jobs:
         rows_html = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#7f8c8d;">No matching remote roles found this run.</td></tr>\n'
 
+    sources = 'RemoteOK, Remotive, Arbeitnow, WeWorkRemotely'
     html = f"""
     <html>
     <head>
@@ -221,7 +378,7 @@ def build_html(jobs):
         <h1>🌍 Remote Roles — {date_str}</h1>
 
         <div class="header-info">
-            <p>📅 {now} | 📊 {len(jobs)} matching roles | 🔍 EMEA-compatible remote positions | Sources: RemoteOK, Remotive, Arbeitnow</p>
+            <p>📅 {now} | 📊 {len(jobs)} matching roles | 🔍 Sorted: Paris → France → EMEA/CET → UK → Global | Sources: {sources}</p>
         </div>
 
         <table>
@@ -239,7 +396,7 @@ def build_html(jobs):
         </table>
 
         <div class="footer">
-            <p>📊 {len(jobs)} remote roles | Sources: RemoteOK, Remotive, Arbeitnow | 🔄 Next: in 2 days at 12:00 CET</p>
+            <p>📊 {len(jobs)} remote roles | Sources: {sources} | 🔄 Next: in 2 days at 12:00 CET</p>
         </div>
     </body>
     </html>
@@ -281,20 +438,21 @@ def main():
     all_jobs.extend(fetch_remoteok())
     all_jobs.extend(fetch_remotive())
     all_jobs.extend(fetch_arbeitnow())
+    all_jobs.extend(fetch_weworkremotely())
     print(f"Total fetched: {len(all_jobs)}")
 
     # Filter and dedup
     filtered = filter_jobs(all_jobs)
-    print(f"After role/EMEA filter: {len(filtered)}")
+    print(f"After role/location filter: {len(filtered)}")
 
     deduped = dedup_jobs(filtered)
     print(f"After dedup: {len(deduped)}")
 
-    # Sort by posted_date descending
-    deduped.sort(key=lambda j: j['posted_date'], reverse=True)
+    # Sort: Paris → France → EMEA/CET → UK → Global, then by date
+    sorted_jobs = sort_jobs(deduped)
 
     # Build HTML and send
-    html = build_html(deduped)
+    html = build_html(sorted_jobs)
     send_email(html)
 
 
