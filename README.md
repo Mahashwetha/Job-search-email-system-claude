@@ -1,19 +1,17 @@
 # Claude Job Search Agent 🎯
 
-An automated daily job search system that emails you curated senior-level job opportunities. Focuses on Software Developer (Java), Backend Java Developer, and Product Owner roles. Easily customize for your location.
+An end-to-end automated job search pipeline that handles everything from finding opportunities to preparing applications. Sends daily styled HTML email digests from your Excel tracker, scans remote job APIs for EMEA-compatible roles, tailors resumes per company using Gemini AI, and drafts LinkedIn outreach messages — all on autopilot via Windows Task Scheduler.
 
 ## Features
 
-- **Daily Email Reports** - Automated emails at 11:00 AM CET
-- **Senior Roles Focus** - Targets positions requiring 8+ years experience
-- **Excel Integration** - Reads and syncs with your application tracker
-- **Smart Organization** - Groups companies by role and status
-- **Clickable Role Links** - Role names link directly to the job posting
-- **HR Contact Column** - Shows recruiter/TA contacts with clickable LinkedIn profiles
-- **Resume Tailor** - Auto-generates per-company tailored resumes using Gemini AI
-- **Outreach Drafter** - LinkedIn message drafts for applied companies
-- **Platform Aggregators** - Curated search links (Glassdoor, LinkedIn, etc.)
-- **Windows Automation** - Runs automatically via Task Scheduler
+- **Daily Email Reports** - Styled HTML emails at 11:00 AM CET with companies grouped by role and status
+- **Remote Job Scanner** - Fetches from RemoteOK, Remotive, and Arbeitnow APIs every 2 days, filters for EMEA-compatible roles
+- **Resume Tailor** - Per-company tailored resumes using Gemini 2.5 Flash (free tier) — never fabricates, only reorders and surfaces existing skills
+- **Outreach Drafter** - Auto-generates short/medium/long LinkedIn message templates for each applied company
+- **Excel Integration** - Reads your application tracker daily for statuses, role links, and HR contacts
+- **HR Contact Management** - Maintains recruiter contacts with clickable LinkedIn hyperlinks
+- **Platform Aggregators** - Curated search links (Glassdoor, LinkedIn, WelcomeToTheJungle, etc.)
+- **Windows Automation** - Runs on autopilot via Task Scheduler
 
 ## Email Report Preview
 
@@ -271,19 +269,40 @@ python resume_tailor.py "https://company.workdayjobs.com/job/..." "Company Name"
 
 **Auto-outreach:** When running in single mode, outreach drafts are automatically generated after a successful resume tailor (no need to run `outreach_drafter.py` separately).
 
+## Architecture
+
+```
+Excel Tracker (List.xlsx)
+    │
+    ├── daily_job_search.py ──→ HTML email (11:00 AM daily)
+    │       │
+    │       ├── outreach_drafter.py ──→ LinkedIn message drafts
+    │       └── resume_tailor.py ──→ Tailored DOCX resumes
+    │               │
+    │               └── Gemini 2.5 Flash API (free tier)
+    │
+    └── remote_search/
+            └── remote_job_search.py ──→ HTML email (every 2 days at 12:00 PM)
+                    │
+                    └── RemoteOK + Remotive + Arbeitnow APIs
+```
+
 ## File Structure
 
 ```
 claude-job-agent/
-├── daily_job_search.py                # Main script (email + outreach + resume tailor)
+├── daily_job_search.py                # Main daily pipeline (email + outreach + resume)
 ├── outreach_drafter.py                # LinkedIn outreach draft generator
 ├── resume_tailor.py                   # Per-company resume tailoring via Gemini AI
-├── config.template.py                  # Configuration template (copy to config.py)
-├── config.py                           # Your private configuration (gitignored)
-├── update_hr_contacts.template.py      # HR contacts updater template
-├── update_hr_contacts.py               # Your HR contacts data (gitignored)
-├── resume/                             # Base resume DOCX (gitignored)
-├── run_daily_job_search.bat           # Windows batch file for scheduler
+├── remote_search/
+│   ├── remote_job_search.py           # Remote job API scanner (EMEA filter)
+│   └── run_remote_job_search.bat      # Scheduler wrapper for remote search
+├── config.template.py                 # Configuration template (copy to config.py)
+├── config.py                          # Your private configuration (gitignored)
+├── update_hr_contacts.template.py     # HR contacts updater template
+├── update_hr_contacts.py              # Your HR contacts data (gitignored)
+├── resume/                            # Base resume DOCX (gitignored)
+├── run_daily_job_search.bat           # Scheduler wrapper for daily email
 ├── setup_task_admin.bat               # Easy setup for scheduled task
 ├── setup_scheduled_task.ps1           # PowerShell setup script
 ├── SETUP_INSTRUCTIONS.txt             # Detailed setup guide
@@ -295,14 +314,18 @@ claude-job-agent/
 
 ## How It Works
 
-1. **Daily Trigger** - Windows Task Scheduler runs the batch file at 11:00 AM
-2. **Read Excel** - Script loads your application tracker for latest statuses, role links, and HR contacts
-3. **Merge Data** - Combines pre-defined companies + Excel tracker companies
-4. **Organize** - Groups by Role and Status (Not Contacted / Review / Applied / Rejected)
-5. **Generate HTML** - Creates a compact, styled email report with clickable role links and HR contacts
-6. **Send Email** - Sends via Gmail SMTP to your inbox
-7. **Outreach Drafts** - Generates LinkedIn message drafts for applied companies with HR contacts
-8. **Resume Tailor** - Generates tailored resumes for applied companies with fetchable job links
+### Daily Pipeline (11:00 AM)
+1. **Read Excel** - Loads your application tracker for statuses, role links, and HR contacts
+2. **Organize** - Groups companies by role and status (Not Contacted / Review / Applied / Rejected)
+3. **Send Email** - Styled HTML report via Gmail SMTP with clickable links and HR contacts
+4. **Outreach Drafts** - LinkedIn message templates for applied companies with HR contacts
+5. **Resume Tailor** - Tailored DOCX resumes via Gemini AI for companies with fetchable job links
+
+### Remote Job Scanner (every 2 days, 12:00 PM)
+1. **Fetch** - Pulls listings from RemoteOK, Remotive, and Arbeitnow APIs
+2. **Filter** - Matches role keywords (java, backend, fullstack, devops, etc.) + EMEA-compatible locations
+3. **Dedup** - Removes duplicates by company+title across sources
+4. **Send Email** - Styled HTML table sorted by posted date
 
 ## Customization
 
@@ -443,4 +466,4 @@ For issues or questions:
 
 ---
 
-**Built with Claude Code** | **Last Updated:** 2026-02-13
+**Built with Claude Code** | **Last Updated:** 2026-02-16
