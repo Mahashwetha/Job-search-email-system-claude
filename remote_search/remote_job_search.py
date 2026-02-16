@@ -42,12 +42,11 @@ ROLE_KEYWORDS = REMOTE_ROLE_KEYWORDS or [
     # Primary: Java/backend (highest relevance)
     'java', 'backend', 'back-end', 'back end',
     'software engineer', 'senior software', 'tech lead',
-    'platform engineer', 'api engineer',
-    # Secondary: adjacent roles the user's skillset covers
-    'devops', 'python', 'cloud engineer', 'sre',
-    'site reliability', 'infrastructure engineer',
+    'api engineer',
+    # Secondary: Python roles (user has Python skills)
+    'python',
     # AI roles (not ML/data science prerequisite)
-    'ai engineer', 'genai', 'llm engineer', 'prompt engineer',
+    'ai engineer', 'genai', 'llm engineer',
 ]
 
 # Roles to exclude even if they match keywords above
@@ -68,6 +67,10 @@ ROLE_EXCLUDE = [
     'web development manager', 'manager, web',
     'freelance', 'dataops', 'data ops',
     'network automation',
+    'devops', 'dev ops', 'cloud engineer', 'sre',
+    'site reliability', 'infrastructure engineer',
+    'platform engineer', 'systems engineer',
+    'prompt engineer', 'c++',
 ]
 
 # Location priority tiers for sorting (lower = shown first)
@@ -83,16 +86,17 @@ LOCATION_PRIORITY = [
       'cet', 'cest', 'central european'], 2),
     # Tier 3: UK (GMT+0/+1, close to CET)
     (['uk', 'united kingdom', 'london', 'britain'], 3),
-    # Tier 4: Worldwide/anywhere/remote (no specific region)
-    (['worldwide', 'anywhere', 'global', 'remote'], 4),
+    # Tier 4: Worldwide/anywhere/global
+    (['worldwide', 'anywhere', 'global'], 4),
 ]
 
 LOCATION_INCLUDE = REMOTE_LOCATION_INCLUDE or [
     'worldwide', 'anywhere', 'emea', 'europe', 'eu', 'france',
-    'paris', 'remote', 'global', 'uk', 'germany', 'netherlands',
+    'paris', 'global', 'uk', 'germany', 'netherlands',
     'belgium', 'spain', 'italy', 'switzerland', 'austria',
     'sweden', 'norway', 'denmark', 'portugal', 'ireland',
     'poland', 'czech', 'united kingdom', 'london',
+    # Note: bare 'remote' excluded to avoid US-default listings
 ]
 
 LOCATION_EXCLUDE = REMOTE_LOCATION_EXCLUDE or [
@@ -193,13 +197,49 @@ def fetch_arbeitnow():
     return jobs
 
 
+def fetch_jobicy():
+    """Fetch jobs from Jobicy RSS feed (remote tech jobs)."""
+    jobs = []
+    try:
+        resp = requests.get(
+            'https://jobicy.com/feed/newjobs',
+            headers={'User-Agent': 'RemoteJobSearch/1.0'},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        root = ET.fromstring(resp.text)
+
+        for item in root.findall('./jobs/job'):
+            pub_date = item.findtext('pubdate', '')
+            posted = ''
+            if pub_date:
+                try:
+                    # Jobicy uses DD.MM.YYYY format
+                    posted = datetime.strptime(pub_date.strip(), '%d.%m.%Y').strftime('%Y-%m-%d')
+                except Exception:
+                    posted = pub_date[:10]
+
+            jobs.append({
+                'company': item.findtext('company', ''),
+                'title': item.findtext('name', ''),
+                'url': item.findtext('link', ''),
+                'source': 'Jobicy',
+                'location': item.findtext('region', 'Remote'),
+                'tags': item.findtext('jobtype', ''),
+                'posted_date': posted,
+            })
+        print(f"  Jobicy: {len(jobs)} jobs fetched")
+    except Exception as e:
+        print(f"  Jobicy error: {e}")
+    return jobs
+
+
 def fetch_weworkremotely():
     """Fetch jobs from We Work Remotely RSS feeds (programming + devops)."""
     jobs = []
     feeds = [
         'https://weworkremotely.com/categories/remote-back-end-programming-jobs.rss',
         'https://weworkremotely.com/categories/remote-programming-jobs.rss',
-        'https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss',
     ]
     seen_guids = set()
     for feed_url in feeds:
@@ -260,6 +300,25 @@ def fetch_weworkremotely():
 
 # ============= FILTER, SORT & DEDUP =============
 
+# US indicators in location text
+US_INDICATORS = [
+    'united states', 'usa', 'us ', 'u.s.', 'america',
+    'new york', 'san francisco', 'los angeles', 'seattle', 'chicago',
+    'austin', 'boston', 'denver', 'miami', 'washington',
+    'california', 'texas', ', ny', ', ca', ', wa',
+    'toronto', 'vancouver', 'canada',
+]
+
+# EMEA indicators that allow a job to pass even if US is also mentioned
+EMEA_SIGNALS = [
+    'anywhere', 'worldwide', 'global', 'emea', 'europe', 'eu',
+    'france', 'paris', 'uk', 'germany', 'netherlands',
+    'belgium', 'spain', 'italy', 'switzerland', 'austria',
+    'sweden', 'norway', 'denmark', 'portugal', 'ireland',
+    'poland', 'czech', 'united kingdom', 'london',
+]
+
+
 def filter_jobs(jobs):
     """Filter jobs by role keywords, exclude irrelevant roles, and check location."""
     filtered = []
@@ -269,31 +328,34 @@ def filter_jobs(jobs):
         tags_lower = job['tags'].lower()
         search_text = f"{title_lower} {tags_lower}"
 
-        # Exclude roles that need ML/data science or are frontend
+        # Exclude roles that need ML/data science, are frontend, devops, etc.
         if any(ex in search_text for ex in ROLE_EXCLUDE):
-            continue
-
-        # Also check title for US city mentions
-        if any(city in title_lower for city in [
-            'seattle', 'new york', 'san francisco', 'los angeles',
-            'chicago', 'austin', 'boston', 'denver', 'miami',
-        ]):
             continue
 
         # Must match at least one role keyword
         if not any(kw in search_text for kw in ROLE_KEYWORDS):
             continue
 
-        # Exclude specific locations (US/Canada/Asia)
+        # Strictly exclude jobs only targeting excluded regions
         loc_tags = f"{location_lower} {tags_lower}"
         if any(ex in loc_tags for ex in LOCATION_EXCLUDE):
             continue
 
-        # Exclude jobs with US flag emoji in location
+        # Exclude US flag emoji
         if '\U0001f1fa\U0001f1f8' in job['location']:
             continue
 
-        # Must have an EMEA-compatible location (or be broadly remote)
+        # Check for US/Canada mentions in location OR title
+        loc_title = f"{location_lower} {title_lower}"
+        has_us = any(us in loc_title for us in US_INDICATORS)
+
+        if has_us:
+            # Only keep if ALSO mentions an EMEA-compatible location
+            has_emea = any(emea in loc_tags for emea in EMEA_SIGNALS)
+            if not has_emea:
+                continue
+
+        # Must have an EMEA-compatible location signal
         if not any(inc in loc_tags for inc in LOCATION_INCLUDE):
             continue
 
@@ -358,7 +420,7 @@ def build_html(jobs):
     if not jobs:
         rows_html = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#7f8c8d;">No matching remote roles found this run.</td></tr>\n'
 
-    sources = 'RemoteOK, Remotive, Arbeitnow, WeWorkRemotely'
+    sources = 'RemoteOK, Remotive, Arbeitnow, WWR, Jobicy'
     html = f"""
     <html>
     <head>
@@ -439,6 +501,7 @@ def main():
     all_jobs.extend(fetch_remotive())
     all_jobs.extend(fetch_arbeitnow())
     all_jobs.extend(fetch_weworkremotely())
+    all_jobs.extend(fetch_jobicy())
     print(f"Total fetched: {len(all_jobs)}")
 
     # Filter and dedup
