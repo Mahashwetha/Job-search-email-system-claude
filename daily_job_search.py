@@ -385,21 +385,32 @@ def get_hot_job_location_tier(location):
     return 3
 
 
-def load_hot_jobs_current():
-    """Load the current sticky hot jobs list per category."""
+def _load_hot_jobs_file():
+    """Load the full hot jobs state file."""
     try:
         with open(HOT_JOBS_HISTORY_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            return data.get('current_jobs', {})
+            return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
 
 
-def save_hot_jobs_current(current_jobs):
-    """Save the current sticky hot jobs list."""
+def load_hot_jobs_current():
+    """Load the current sticky hot jobs list per category."""
+    return _load_hot_jobs_file().get('current_jobs', {})
+
+
+def load_hot_jobs_blocklist():
+    """Load the blocklist of manually removed companies."""
+    return set(_load_hot_jobs_file().get('blocklist', []))
+
+
+def save_hot_jobs_current(current_jobs, blocklist=None):
+    """Save the current sticky hot jobs list and optional blocklist."""
+    existing = _load_hot_jobs_file()
     data = {
         'last_updated': datetime.now().strftime('%Y-%m-%d'),
         'current_jobs': current_jobs,
+        'blocklist': list(blocklist) if blocklist is not None else existing.get('blocklist', []),
     }
     with open(HOT_JOBS_HISTORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2)
@@ -410,6 +421,20 @@ def _is_in_tracker(job_company, tracker_names):
     return any(t in job_company or job_company in t for t in tracker_names)
 
 
+def _is_blocklisted(job_company, job_title, blocklist):
+    """Check if a specific job (company+role) is blocklisted."""
+    for entry in blocklist:
+        if '||' in entry:
+            bl_company, bl_role = entry.split('||', 1)
+            if bl_company in job_company and bl_role in job_title:
+                return True
+        else:
+            # Legacy: company-only blocklist entry
+            if entry in job_company or job_company in entry:
+                return True
+    return False
+
+
 def fetch_hot_jobs(tracker):
     """Sticky hot jobs: keep showing the same 5 per category, only backfill gaps.
 
@@ -418,6 +443,7 @@ def fetch_hot_jobs(tracker):
     """
     queries = HOT_JOB_QUERIES or DEFAULT_HOT_JOB_QUERIES
     current = load_hot_jobs_current()
+    blocklist = load_hot_jobs_blocklist()
     tracker_names = [name.lower().strip() for name in tracker.keys()]
 
     hot_jobs_by_category = {}
@@ -456,6 +482,8 @@ def fetch_hot_jobs(tracker):
                     if key in existing_keys:
                         continue
                     if _is_in_tracker(job['company'].lower().strip(), tracker_names):
+                        continue
+                    if _is_blocklisted(job['company'].lower().strip(), job['title'].lower().strip(), blocklist):
                         continue
                     existing_urls.add(job['url'])
                     existing_keys.add(key)
@@ -793,11 +821,69 @@ def main():
     run_tailor()
 
 def run_hot_jobs_only():
-    """Standalone hot jobs check - prints to console, no email."""
+    """Standalone hot jobs check - prints to console, no email.
+
+    Flags:
+        --refresh           Clear all categories and re-fetch
+        --refresh "Cat"     Clear only that category and re-fetch
+    """
     import sys
     print("=== Hot Jobs Check ===")
     tracker = read_application_tracker()
     print(f"Tracker: {len(tracker)} companies\n")
+
+    # Handle --remove flag: drop a specific job (company + role) and blocklist it
+    # Usage: --remove "Company" "Role title"
+    if '--remove' in sys.argv:
+        remove_idx = sys.argv.index('--remove')
+        remaining = [a for a in sys.argv[remove_idx + 1:] if not a.startswith('--')]
+        if len(remaining) >= 2:
+            remove_company = remaining[0].lower().strip()
+            remove_role = remaining[1].lower().strip()
+            current = load_hot_jobs_current()
+            blocklist = load_hot_jobs_blocklist()
+            removed = False
+            for cat, jobs in current.items():
+                before = len(jobs)
+                current[cat] = [
+                    j for j in jobs
+                    if not (remove_company in j['company'].lower() and remove_role in j['title'].lower())
+                ]
+                if len(current[cat]) < before:
+                    print(f"Removed '{remove_company}' / '{remove_role}' from {cat}")
+                    removed = True
+            blocklist.add(f"{remove_company}||{remove_role}")
+            save_hot_jobs_current(current, blocklist)
+            if removed:
+                print(f"Blocklisted - this job won't reappear")
+            else:
+                print(f"Job not found in current list but blocklisted for future")
+            print()
+        elif len(remaining) == 1:
+            print("Usage: --remove \"Company\" \"Role title\"")
+            print("Both company and role are required to avoid removing other listings")
+            print()
+            return
+
+    # Handle --refresh flag
+    if '--refresh' in sys.argv:
+        refresh_idx = sys.argv.index('--refresh')
+        # Check if a specific category was given after --refresh
+        refresh_cat = None
+        if refresh_idx + 1 < len(sys.argv) and not sys.argv[refresh_idx + 1].startswith('--'):
+            refresh_cat = sys.argv[refresh_idx + 1]
+
+        current = load_hot_jobs_current()
+        if refresh_cat:
+            if refresh_cat in current:
+                del current[refresh_cat]
+                print(f"Cleared '{refresh_cat}' - will re-fetch\n")
+            else:
+                print(f"Category '{refresh_cat}' not found. Available: {', '.join(current.keys())}\n")
+        else:
+            current = {}
+            print("Cleared all categories - will re-fetch\n")
+        save_hot_jobs_current(current)
 
     hot_jobs_by_category = fetch_hot_jobs(tracker)
     total = sum(len(jobs) for jobs in hot_jobs_by_category.values())
