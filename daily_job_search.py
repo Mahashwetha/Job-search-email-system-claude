@@ -328,21 +328,38 @@ DEFAULT_HOT_JOB_QUERIES = {
         ('senior+java+developer', 'Paris, France'),
         ('senior+java+developer', 'France'),
         ('senior+software+engineer+java', 'Paris, France'),
+        ('senior+backend+java', 'Paris, France'),
+        ('senior+backend+java', 'France'),
+        ('senior+developer+spring+boot', 'Paris, France'),
+        ('senior+java+engineer', 'France'),
     ],
     'Backend Java': [
         ('backend+java+developer', 'Paris, France'),
+        ('backend+java+developer', 'France'),
         ('lead+backend+engineer', 'France'),
+        ('java+backend+engineer', 'Paris, France'),
+        ('spring+boot+developer', 'Paris, France'),
     ],
     'Product Owner': [
         ('product+owner', 'Paris, France'),
         ('product+owner', 'France'),
     ],
     'Assistant Project Manager': [
-        ('assistant+project+manager', 'Paris, France'),
-        ('assistant+project+manager', 'France'),
         ('assistant+project+manager+java', 'Paris, France'),
         ('assistant+project+manager+java', 'France'),
+        ('assistant+project+manager+IT', 'Paris, France'),
+        ('assistant+project+manager+IT', 'France'),
+        ('assistant+chef+de+projet+informatique', 'Paris, France'),
+        ('assistant+chef+de+projet+SI', 'Paris, France'),
     ],
+}
+
+# Per-category title filters: job title must contain at least one keyword (case-insensitive).
+# Categories not listed here accept all titles.
+HOT_JOB_TITLE_FILTERS = {
+    'Assistant Project Manager': ['java', 'software', ' it ', ' si ', 'informatique', 'digital',
+                                  'data', 'développeur', 'developer', 'système d\'information',
+                                  'web', 'cloud', 'devops', 'cyber'],
 }
 
 
@@ -455,6 +472,9 @@ def fetch_hot_jobs(tracker):
     hot_jobs_by_category = {}
 
     for category, query_list in queries.items():
+        # Optional title filter for this category
+        title_filter = HOT_JOB_TITLE_FILTERS.get(category)
+
         # Start with existing sticky list for this category
         existing = current.get(category, [])
 
@@ -491,6 +511,11 @@ def fetch_hot_jobs(tracker):
                         continue
                     if _is_blocklisted(job['company'].lower().strip(), job['title'].lower().strip(), blocklist):
                         continue
+                    # Apply per-category title filter
+                    if title_filter:
+                        title_lower = job['title'].lower()
+                        if not any(kw in title_lower for kw in title_filter):
+                            continue
                     existing_urls.add(job['url'])
                     existing_keys.add(key)
                     candidates.append(job)
