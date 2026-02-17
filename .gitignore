@@ -43,3 +43,5 @@ ENV/
 # OS files
 .DS_Store
 Thumbs.db
+remote_search/previous_jobs.json
+daily_hot_jobs.json

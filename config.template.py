@@ -67,6 +67,27 @@ REMOTE_LOCATION_EXCLUDE = [
     'north america', 'us or canada', 'usa/canada', 'na only',
 ]
 
+# ── Hot Jobs (daily_job_search.py) ──
+# LinkedIn queries for the "Hot Jobs" section in the daily email.
+# Each category maps to a list of (keywords, location) tuples.
+# If omitted, defaults are used (Senior Java, Backend Java, Product Owner in Paris/France).
+
+# HOT_JOB_QUERIES = {
+#     'Senior Java': [
+#         ('senior+java+developer', 'Paris, France'),
+#         ('senior+java+developer', 'France'),
+#         ('senior+software+engineer+java', 'Paris, France'),
+#     ],
+#     'Backend Java': [
+#         ('backend+java+developer', 'Paris, France'),
+#         ('lead+backend+engineer', 'France'),
+#     ],
+#     'Product Owner': [
+#         ('product+owner', 'Paris, France'),
+#         ('product+owner', 'France'),
+#     ],
+# }
+
 # How to get Gmail App Password:
 # 1. Go to Google Account → Security → 2-Step Verification
 # 2. Scroll to "App passwords" at the bottom

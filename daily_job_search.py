@@ -10,11 +10,15 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
+from html import unescape
 import openpyxl
 import re
 import shutil
 import tempfile
 import os
+import json
+import requests
+import time
 
 # ============= CONFIGURATION =============
 # Import configuration from config.py (create from config.template.py)
@@ -25,6 +29,11 @@ except ImportError:
     print("Please copy config.template.py to config.py and fill in your details.")
     print("See README.md for instructions.")
     exit(1)
+
+try:
+    from config import HOT_JOB_QUERIES
+except ImportError:
+    HOT_JOB_QUERIES = None
 
 # ============= LOCATION SETTINGS =============
 # CUSTOMIZE THESE FOR YOUR LOCATION!
@@ -310,9 +319,219 @@ def map_excel_role_to_category(excel_role):
 
     return None
 
+# ============= HOT JOBS — LinkedIn Listings =============
+
+HOT_JOBS_HISTORY_FILE = os.path.join(os.path.dirname(__file__), 'daily_hot_jobs.json')
+
+DEFAULT_HOT_JOB_QUERIES = {
+    'Senior Java': [
+        ('senior+java+developer', 'Paris, France'),
+        ('senior+java+developer', 'France'),
+        ('senior+software+engineer+java', 'Paris, France'),
+    ],
+    'Backend Java': [
+        ('backend+java+developer', 'Paris, France'),
+        ('lead+backend+engineer', 'France'),
+    ],
+    'Product Owner': [
+        ('product+owner', 'Paris, France'),
+        ('product+owner', 'France'),
+    ],
+}
+
+
+def fetch_linkedin_jobs(keywords, location):
+    """Fetch jobs from LinkedIn guest API for a single query."""
+    jobs = []
+    try:
+        url = (
+            f'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search'
+            f'?keywords={keywords}&location={location.replace(" ", "+")}&start=0'
+        )
+        resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
+        if resp.status_code != 200:
+            return jobs
+
+        titles = re.findall(r'base-search-card__title[^>]*>([^<]+)<', resp.text)
+        companies = re.findall(r'base-search-card__subtitle[^>]*>[^<]*<a[^>]*>([^<]+)<', resp.text)
+        locations = re.findall(r'job-search-card__location[^>]*>([^<]+)<', resp.text)
+        links = re.findall(r'href="(https://(?:fr|www)\.linkedin\.com/jobs/view/[^"]+)"', resp.text)
+
+        for i in range(min(len(titles), len(companies), len(locations), len(links))):
+            clean_url = unescape(links[i]).split('?')[0]
+            jobs.append({
+                'company': unescape(companies[i].strip()),
+                'title': unescape(titles[i].strip()),
+                'url': clean_url,
+                'location': unescape(locations[i].strip()),
+            })
+    except Exception as e:
+        print(f"  LinkedIn hot jobs error ({keywords}, {location}): {e}")
+    return jobs
+
+
+def get_hot_job_location_tier(location):
+    """Return location priority: Paris(0) → France(1) → EMEA(2) → Other(3)."""
+    loc = location.lower()
+    if 'paris' in loc:
+        return 0
+    if 'france' in loc or 'île-de-france' in loc or 'ile-de-france' in loc:
+        return 1
+    emea = ['europe', 'emea', 'germany', 'netherlands', 'belgium', 'spain',
+            'italy', 'switzerland', 'uk', 'united kingdom', 'ireland',
+            'sweden', 'denmark', 'portugal', 'austria', 'poland']
+    if any(e in loc for e in emea):
+        return 2
+    return 3
+
+
+def load_hot_jobs_current():
+    """Load the current sticky hot jobs list per category."""
+    try:
+        with open(HOT_JOBS_HISTORY_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get('current_jobs', {})
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def save_hot_jobs_current(current_jobs):
+    """Save the current sticky hot jobs list."""
+    data = {
+        'last_updated': datetime.now().strftime('%Y-%m-%d'),
+        'current_jobs': current_jobs,
+    }
+    with open(HOT_JOBS_HISTORY_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)
+
+
+def _is_in_tracker(job_company, tracker_names):
+    """Check if a job company matches any tracker company (substring both ways)."""
+    return any(t in job_company or job_company in t for t in tracker_names)
+
+
+def fetch_hot_jobs(tracker):
+    """Sticky hot jobs: keep showing the same 5 per category, only backfill gaps.
+
+    A job is removed from the list when its company appears in the tracker.
+    Only then do we fetch from LinkedIn to fill the empty slot(s).
+    """
+    queries = HOT_JOB_QUERIES or DEFAULT_HOT_JOB_QUERIES
+    current = load_hot_jobs_current()
+    tracker_names = [name.lower().strip() for name in tracker.keys()]
+
+    hot_jobs_by_category = {}
+
+    for category, query_list in queries.items():
+        # Start with existing sticky list for this category
+        existing = current.get(category, [])
+
+        # Remove jobs whose company is now in the tracker
+        kept = []
+        for job in existing:
+            if _is_in_tracker(job['company'].lower().strip(), tracker_names):
+                print(f"  [{category}] Removed '{job['company']}' (now in tracker)")
+            else:
+                kept.append(job)
+
+        slots_needed = 5 - len(kept)
+
+        # Only fetch from LinkedIn if we have empty slots
+        if slots_needed > 0:
+            print(f"  [{category}] {len(kept)} kept, need {slots_needed} more - fetching LinkedIn...")
+            # Collect existing URLs/keys to avoid duplicates
+            existing_keys = set(
+                (j['company'].lower().strip(), j['title'].lower().strip()) for j in kept
+            )
+            existing_urls = set(j['url'] for j in kept)
+
+            candidates = []
+            for keywords, location in query_list:
+                jobs = fetch_linkedin_jobs(keywords, location)
+                print(f"    '{keywords}' in '{location}': {len(jobs)} results")
+                for job in jobs:
+                    if job['url'] in existing_urls:
+                        continue
+                    key = (job['company'].lower().strip(), job['title'].lower().strip())
+                    if key in existing_keys:
+                        continue
+                    if _is_in_tracker(job['company'].lower().strip(), tracker_names):
+                        continue
+                    existing_urls.add(job['url'])
+                    existing_keys.add(key)
+                    candidates.append(job)
+                time.sleep(2)
+
+            # Sort candidates by location tier, pick best ones to fill slots
+            candidates.sort(key=lambda j: get_hot_job_location_tier(j['location']))
+            kept.extend(candidates[:slots_needed])
+        else:
+            print(f"  [{category}] All 5 slots filled - no fetch needed")
+
+        if kept:
+            hot_jobs_by_category[category] = kept
+
+    # Save updated sticky list
+    save_hot_jobs_current(hot_jobs_by_category)
+
+    return hot_jobs_by_category
+
+
+TIER_BADGES = {0: '🏠 Paris', 1: '🇫🇷 France', 2: '🌍 EMEA', 3: '📍 Other'}
+
+
+def build_hot_jobs_html(hot_jobs_by_category):
+    """Build orange-themed HTML section for hot jobs."""
+    if not hot_jobs_by_category:
+        return ''
+
+    total = sum(len(jobs) for jobs in hot_jobs_by_category.values())
+
+    html = f"""
+        <div style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; padding: 8px 12px; border-radius: 6px; margin: 10px 0 5px 0;">
+            <h2 style="margin: 0; font-size: 16px; color: white; border: none; padding: 0;">🔥 Hot Jobs — {total} New Listing{'s' if total != 1 else ''} Today</h2>
+        </div>
+"""
+
+    for category, jobs in hot_jobs_by_category.items():
+        html += f"""
+        <h3 style="color: #e65100; margin: 8px 0 3px 0; font-size: 12px; padding-left: 5px;">{category} ({len(jobs)} job{'s' if len(jobs) != 1 else ''})</h3>
+        <table style="border-collapse: collapse; width: 100%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.08); font-size: 11px; margin: 3px 0;">
+            <thead>
+                <tr>
+                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="20%">Company</th>
+                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="50%">Role</th>
+                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="30%">Location</th>
+                </tr>
+            </thead>
+            <tbody>
+"""
+        for job in jobs:
+            tier = get_hot_job_location_tier(job['location'])
+            badge = TIER_BADGES.get(tier, '')
+            html += f"""                <tr style="border-bottom: 1px solid #ecf0f1;">
+                    <td style="padding: 4px 6px; font-weight: bold;">{job['company']}</td>
+                    <td style="padding: 4px 6px;"><a href="{job['url']}" style="color: #e65100; text-decoration: underline;">{job['title']}</a></td>
+                    <td style="padding: 4px 6px;"><span style="background: #fff3e0; padding: 1px 6px; border-radius: 8px; font-size: 9px;">{badge}</span> {job['location']}</td>
+                </tr>
+"""
+        html += """            </tbody>
+        </table>
+"""
+
+    return html
+
+
 def create_job_report():
     """Generate ULTRA COMPACT job report"""
     tracker = read_application_tracker()
+
+    # Fetch hot jobs from LinkedIn (filtered against tracker + history)
+    print("Fetching hot jobs from LinkedIn...")
+    hot_jobs_by_category = fetch_hot_jobs(tracker)
+    hot_jobs_total = sum(len(jobs) for jobs in hot_jobs_by_category.values())
+    print(f"Hot jobs: {hot_jobs_total} new listings across {len(hot_jobs_by_category)} categories")
+    hot_jobs_html = build_hot_jobs_html(hot_jobs_by_category)
 
     # Merge tracker companies into COMPANIES_BY_ROLE
    # companies_merged = {}
@@ -394,6 +613,9 @@ def create_job_report():
              <p>NOTE: ALL JOBS WHICH ARE NOT AVAILABLE OR NOTHING IN STATUS TRACKER LIST.XLSX goes as  No Jobs Available under Senior Java (8+ yrs)  </p>
         </div>
 """
+
+    # Inject hot jobs section
+    report += hot_jobs_html
 
     # Generate tables for each role
     for role_name, companies_dict in companies_merged.items():

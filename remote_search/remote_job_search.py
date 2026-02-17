@@ -3,12 +3,13 @@ Remote Job Search — fetches remote-only listings from free APIs/feeds,
 filters for EMEA-compatible roles matching user profile,
 and sends a styled HTML email every 2 days.
 
-Sources: RemoteOK, Remotive, Arbeitnow, We Work Remotely
+Sources: RemoteOK, Remotive, Arbeitnow, We Work Remotely, Jobicy, LinkedIn (France)
 """
 
 import sys
 import os
 import re
+import json
 import smtplib
 import requests
 import xml.etree.ElementTree as ET
@@ -16,6 +17,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from email.utils import parsedate_to_datetime
+from html import unescape
 
 # Add parent directory to path so we can import config
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -43,11 +45,19 @@ ROLE_KEYWORDS = REMOTE_ROLE_KEYWORDS or [
     'java', 'backend', 'back-end', 'back end',
     'software engineer', 'senior software', 'tech lead',
     'api engineer',
-    # Secondary: Python roles (user has Python skills)
-    'python',
     # AI roles (not ML/data science prerequisite)
     'ai engineer', 'genai', 'llm engineer',
 ]
+
+# Python is secondary — only include Python roles if they ALSO mention Java/backend
+PYTHON_SECONDARY_KEYWORDS = ['python']
+JAVA_BACKEND_SIGNALS = ['java', 'backend', 'back-end', 'back end', 'jvm', 'spring', 'microservices']
+
+# Sources that are inherently EU-focused (jobs from these pass without explicit EMEA location)
+EU_FOCUSED_SOURCES = ['Arbeitnow']
+
+# Sources where "Remote" without region is common — allow if no US indicators found
+RELAXED_LOCATION_SOURCES = ['Jobicy']
 
 # Roles to exclude even if they match keywords above
 ROLE_EXCLUDE = [
@@ -62,6 +72,7 @@ ROLE_EXCLUDE = [
     'full stack', 'full-stack', 'fullstack',
     'network engineer', 'voip', 'linux admin',
     'consultant', 'werkstudent', 'intern ',
+    'new grad', 'graduate engineer', 'entry level', 'junior ',
     'guatemala', 'latin america', 'latam',
     'ror ', 'rails developer', 'ruby on rails',
     'web development manager', 'manager, web',
@@ -96,6 +107,10 @@ LOCATION_INCLUDE = REMOTE_LOCATION_INCLUDE or [
     'belgium', 'spain', 'italy', 'switzerland', 'austria',
     'sweden', 'norway', 'denmark', 'portugal', 'ireland',
     'poland', 'czech', 'united kingdom', 'london',
+    'romania', 'hungary', 'greece', 'finland', 'croatia',
+    'luxembourg', 'berlin', 'amsterdam', 'barcelona', 'munich',
+    'dublin', 'lisbon', 'warsaw', 'prague', 'vienna', 'brussels',
+    'gmt', 'cet', 'cest', 'central european', 'utc+1', 'utc+2',
     # Note: bare 'remote' excluded to avoid US-default listings
 ]
 
@@ -165,32 +180,36 @@ def fetch_remotive():
 
 
 def fetch_arbeitnow():
-    """Fetch jobs from Arbeitnow API (EU-focused)."""
+    """Fetch jobs from Arbeitnow API (EU-focused), multiple pages."""
     jobs = []
     try:
-        resp = requests.get(
-            'https://www.arbeitnow.com/api/job-board-api',
-            timeout=15,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        for item in data.get('data', []):
-            if not item.get('remote', False):
-                continue
-            created_at = item.get('created_at', '')
-            if isinstance(created_at, int):
-                posted = datetime.fromtimestamp(created_at).strftime('%Y-%m-%d')
-            else:
-                posted = str(created_at)[:10]
-            jobs.append({
-                'company': item.get('company_name', ''),
-                'title': item.get('title', ''),
-                'url': item.get('url', ''),
-                'source': 'Arbeitnow',
-                'location': item.get('location', 'Remote'),
-                'tags': ', '.join(item.get('tags', [])),
-                'posted_date': posted,
-            })
+        for page in range(1, 4):  # Fetch up to 3 pages
+            resp = requests.get(
+                f'https://www.arbeitnow.com/api/job-board-api?page={page}',
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            page_data = data.get('data', [])
+            if not page_data:
+                break
+            for item in page_data:
+                if not item.get('remote', False):
+                    continue
+                created_at = item.get('created_at', '')
+                if isinstance(created_at, int):
+                    posted = datetime.fromtimestamp(created_at).strftime('%Y-%m-%d')
+                else:
+                    posted = str(created_at)[:10]
+                jobs.append({
+                    'company': item.get('company_name', ''),
+                    'title': item.get('title', ''),
+                    'url': item.get('url', ''),
+                    'source': 'Arbeitnow',
+                    'location': item.get('location', 'Remote'),
+                    'tags': ', '.join(item.get('tags', [])),
+                    'posted_date': posted,
+                })
         print(f"  Arbeitnow: {len(jobs)} remote jobs fetched")
     except Exception as e:
         print(f"  Arbeitnow error: {e}")
@@ -220,8 +239,8 @@ def fetch_jobicy():
                     posted = pub_date[:10]
 
             jobs.append({
-                'company': item.findtext('company', ''),
-                'title': item.findtext('name', ''),
+                'company': unescape(item.findtext('company', '')),
+                'title': unescape(item.findtext('name', '')),
                 'url': item.findtext('link', ''),
                 'source': 'Jobicy',
                 'location': item.findtext('region', 'Remote'),
@@ -298,6 +317,90 @@ def fetch_weworkremotely():
     return jobs
 
 
+def fetch_linkedin_france():
+    """Fetch backend/Java jobs in France from LinkedIn's public guest API."""
+    jobs = []
+    queries = [
+        'java+backend',
+        'backend+engineer',
+        'senior+software+engineer+java',
+    ]
+    seen_urls = set()
+    for query in queries:
+        try:
+            # f_WT=2 filters to remote-only positions
+            url = f'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={query}&location=France&f_WT=2&start=0'
+            resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
+            if resp.status_code != 200:
+                continue
+
+            titles = re.findall(r'base-search-card__title[^>]*>([^<]+)<', resp.text)
+            companies = re.findall(r'base-search-card__subtitle[^>]*>[^<]*<a[^>]*>([^<]+)<', resp.text)
+            locations = re.findall(r'job-search-card__location[^>]*>([^<]+)<', resp.text)
+            links = re.findall(r'href="(https://fr\.linkedin\.com/jobs/view/[^"]+)"', resp.text)
+
+            for i in range(min(len(titles), len(companies), len(locations), len(links))):
+                clean_url = unescape(links[i]).split('?')[0]
+                if clean_url in seen_urls:
+                    continue
+                seen_urls.add(clean_url)
+
+                title_text = titles[i].strip()
+
+                jobs.append({
+                    'company': companies[i].strip(),
+                    'title': title_text,
+                    'url': clean_url,
+                    'source': 'LinkedIn FR',
+                    'location': locations[i].strip(),
+                    'tags': '',
+                    'posted_date': datetime.now().strftime('%Y-%m-%d'),
+                })
+        except Exception as e:
+            print(f"  LinkedIn FR error ({query}): {e}")
+
+    print(f"  LinkedIn France: {len(jobs)} jobs fetched")
+    return jobs
+
+
+# Known EMEA tech companies → country (for enriching "Remote" listings)
+KNOWN_COMPANY_COUNTRIES = {
+    'tines': 'Ireland', 'intercom': 'Ireland', 'stripe': 'Ireland/US',
+    'personio': 'Germany', 'celonis': 'Germany', 'contentful': 'Germany',
+    'sap': 'Germany', 'delivery hero': 'Germany', 'zalando': 'Germany',
+    'trustpilot': 'Denmark', 'unity': 'Denmark', 'pleo': 'Denmark',
+    'klarna': 'Sweden', 'spotify': 'Sweden', 'king': 'Sweden',
+    'adyen': 'Netherlands', 'booking.com': 'Netherlands', 'elastic': 'Netherlands',
+    'revolut': 'UK', 'monzo': 'UK', 'wise': 'UK', 'deliveroo': 'UK',
+    'datadog': 'France/US', 'criteo': 'France', 'doctolib': 'France',
+    'alan': 'France', 'sorare': 'France', 'ledger': 'France',
+    'veriff': 'Estonia', 'pipedrive': 'Estonia',
+    'grafana labs': 'Sweden/Global', 'canonical': 'UK/Global',
+    'gitlab': 'Global', 'automattic': 'Global',
+    'meta': 'US', 'google': 'US', 'amazon': 'US', 'apple': 'US',
+    'microsoft': 'US', 'netflix': 'US', 'uber': 'US', 'airbnb': 'US',
+    'coinbase': 'US', 'robinhood': 'US', 'figma': 'US',
+    'upstart': 'US', 'akamai': 'US', 'pnc': 'US', 'chainguard': 'US',
+    'hashicorp': 'US', 'cloudflare': 'US', 'twilio': 'US',
+}
+
+
+def enrich_job_location(job):
+    """Add company country info to jobs with vague 'Remote' location."""
+    if job['location'].strip().lower() in ('remote', '', 'worldwide'):
+        company_lower = job['company'].lower().strip()
+        # Check known company lookup
+        for known, country in KNOWN_COMPANY_COUNTRIES.items():
+            if known in company_lower or company_lower in known:
+                job['tags'] = f"{country}" + (f" | {job['tags']}" if job['tags'] else '')
+                break
+        # Check salary currency in tags/description for hints
+        if '$' in job.get('tags', '') and '€' not in job.get('tags', ''):
+            if not any(c in job.get('tags', '').lower() for c in ['ireland', 'uk', 'germany', 'france', 'global']):
+                job['tags'] = (job['tags'] + ' | Likely US' if job['tags'] else 'Likely US')
+    return job
+
+
 # ============= FILTER, SORT & DEDUP =============
 
 # US indicators in location text
@@ -316,6 +419,10 @@ EMEA_SIGNALS = [
     'belgium', 'spain', 'italy', 'switzerland', 'austria',
     'sweden', 'norway', 'denmark', 'portugal', 'ireland',
     'poland', 'czech', 'united kingdom', 'london',
+    'romania', 'hungary', 'greece', 'finland', 'croatia',
+    'luxembourg', 'berlin', 'amsterdam', 'barcelona', 'munich',
+    'dublin', 'lisbon', 'warsaw', 'prague', 'vienna', 'brussels',
+    'gmt', 'cet', 'cest', 'utc+1', 'utc+2',
 ]
 
 
@@ -332,8 +439,19 @@ def filter_jobs(jobs):
         if any(ex in search_text for ex in ROLE_EXCLUDE):
             continue
 
-        # Must match at least one role keyword
-        if not any(kw in search_text for kw in ROLE_KEYWORDS):
+        # Check primary role keywords
+        matches_primary = any(kw in search_text for kw in ROLE_KEYWORDS)
+
+        # Check secondary Python keyword
+        matches_python = any(kw in search_text for kw in PYTHON_SECONDARY_KEYWORDS)
+
+        if matches_python and not matches_primary:
+            # Python-only role: only allow if it ALSO mentions Java/backend
+            has_java_backend = any(sig in search_text for sig in JAVA_BACKEND_SIGNALS)
+            if not has_java_backend:
+                continue
+        elif not matches_primary:
+            # No keyword match at all
             continue
 
         # Strictly exclude jobs only targeting excluded regions
@@ -355,11 +473,23 @@ def filter_jobs(jobs):
             if not has_emea:
                 continue
 
-        # Must have an EMEA-compatible location signal
-        if not any(inc in loc_tags for inc in LOCATION_INCLUDE):
+        # EU-focused sources (e.g., Arbeitnow) pass without explicit EMEA location
+        if job.get('source') in EU_FOCUSED_SOURCES:
+            filtered.append(job)
             continue
 
-        filtered.append(job)
+        # Must have an EMEA-compatible location signal
+        has_emea_loc = any(inc in loc_tags for inc in LOCATION_INCLUDE)
+        if has_emea_loc:
+            filtered.append(job)
+            continue
+
+        # Relaxed sources: allow "Remote" with no region if no US indicators
+        # Also exclude if enrichment tagged it as US company
+        enriched_us = 'likely us' in tags_lower or tags_lower.startswith('us ')
+        if job.get('source') in RELAXED_LOCATION_SOURCES and not has_us and not enriched_us:
+            filtered.append(job)
+            continue
 
     return filtered
 
@@ -373,9 +503,19 @@ def get_location_tier(job):
     return 5  # Unknown location goes last
 
 
+def is_explicitly_remote(job):
+    """Check if a job explicitly mentions remote in title or location."""
+    text = f"{job['title'].lower()} {job['location'].lower()}"
+    return 'remote' in text or 'full remote' in text or 'télétravail' in text
+
+
 def sort_jobs(jobs):
-    """Sort by location tier (Paris→France→EMEA→UK→Global), then by date descending."""
-    return sorted(jobs, key=lambda j: (get_location_tier(j), j['posted_date'][::-1]))
+    """Sort by location tier, then remote-first within tier, then by date descending."""
+    return sorted(jobs, key=lambda j: (
+        get_location_tier(j),
+        0 if is_explicitly_remote(j) else 1,  # remote first within tier
+        j['posted_date'][::-1],
+    ))
 
 
 def dedup_jobs(jobs):
@@ -390,14 +530,50 @@ def dedup_jobs(jobs):
     return unique
 
 
+# ============= JOB HISTORY TRACKING =============
+
+HISTORY_FILE = os.path.join(os.path.dirname(__file__), 'previous_jobs.json')
+
+
+def load_previous_jobs():
+    """Load previous job keys from history file."""
+    try:
+        with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+            return set(tuple(k) for k in json.load(f))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return set()
+
+
+def save_current_jobs(jobs):
+    """Save current job keys to history file for next run comparison."""
+    keys = [(j['company'].lower().strip(), j['title'].lower().strip()) for j in jobs]
+    with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+        json.dump(keys, f)
+
+
+def mark_new_jobs(jobs, previous_keys):
+    """Mark each job as new or existing based on previous run."""
+    for job in jobs:
+        key = (job['company'].lower().strip(), job['title'].lower().strip())
+        job['is_new'] = key not in previous_keys
+    return jobs
+
+
 # ============= HTML EMAIL =============
 
-TIER_LABELS = {0: 'Paris', 1: 'France', 2: 'EMEA / CET', 3: 'UK', 4: 'Global / Remote'}
+TIER_LABELS = {0: 'Paris', 1: 'France', 2: 'EMEA / CET', 3: 'UK', 4: 'Global / Remote', 5: 'Remote (Region Unspecified)'}
 
-def build_html(jobs):
+def build_html(jobs, new_count=0, total_unchanged=False):
     """Build styled HTML email with job listings grouped by location tier."""
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
     date_str = datetime.now().strftime('%Y-%m-%d')
+
+    # Banner for no-change or new jobs count
+    banner_html = ''
+    if total_unchanged:
+        banner_html = '<div style="background:#fff3cd;color:#856404;padding:8px 12px;border-radius:4px;margin-bottom:8px;font-size:12px;font-weight:bold;text-align:center;">No new jobs since last run — all listings unchanged.</div>'
+    elif new_count > 0:
+        banner_html = f'<div style="background:#d4edda;color:#155724;padding:8px 12px;border-radius:4px;margin-bottom:8px;font-size:12px;font-weight:bold;text-align:center;">🆕 {new_count} new job(s) since last run — highlighted in green below.</div>'
 
     rows_html = ''
     current_tier = None
@@ -408,8 +584,12 @@ def build_html(jobs):
             label = TIER_LABELS.get(tier, 'Other')
             rows_html += f'                <tr style="background:#e8f5e9;font-weight:bold;"><td colspan="5" style="padding:4px 6px;font-size:11px;color:#2c3e50;">📍 {label}</td></tr>\n'
 
-        rows_html += f"""                <tr>
-                    <td><strong>{job['company']}</strong></td>
+        is_new = job.get('is_new', False)
+        row_style = ' style="background:#d4edda;"' if is_new else ''
+        new_badge = ' <span style="background:#28a745;color:white;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:bold;">NEW</span>' if is_new else ''
+
+        rows_html += f"""                <tr{row_style}>
+                    <td><strong>{job['company']}</strong>{new_badge}</td>
                     <td><a href="{job['url']}" style="color: #3498db; text-decoration: underline;">{job['title']}</a></td>
                     <td>{job['source']}</td>
                     <td>{job['location']}<br><span style="font-size:9px;color:#7f8c8d;">{job['tags']}</span></td>
@@ -420,7 +600,7 @@ def build_html(jobs):
     if not jobs:
         rows_html = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#7f8c8d;">No matching remote roles found this run.</td></tr>\n'
 
-    sources = 'RemoteOK, Remotive, Arbeitnow, WWR, Jobicy'
+    sources = 'RemoteOK, Remotive, Arbeitnow, WWR, Jobicy, LinkedIn FR'
     html = f"""
     <html>
     <head>
@@ -442,6 +622,8 @@ def build_html(jobs):
         <div class="header-info">
             <p>📅 {now} | 📊 {len(jobs)} matching roles | 🔍 Sorted: Paris → France → EMEA/CET → UK → Global | Sources: {sources}</p>
         </div>
+
+        {banner_html}
 
         <table>
             <thead>
@@ -502,7 +684,11 @@ def main():
     all_jobs.extend(fetch_arbeitnow())
     all_jobs.extend(fetch_weworkremotely())
     all_jobs.extend(fetch_jobicy())
+    all_jobs.extend(fetch_linkedin_france())
     print(f"Total fetched: {len(all_jobs)}")
+
+    # Enrich location info for vague "Remote" listings
+    all_jobs = [enrich_job_location(job) for job in all_jobs]
 
     # Filter and dedup
     filtered = filter_jobs(all_jobs)
@@ -511,11 +697,25 @@ def main():
     deduped = dedup_jobs(filtered)
     print(f"After dedup: {len(deduped)}")
 
-    # Sort: Paris → France → EMEA/CET → UK → Global, then by date
+    # Sort: Paris → France → EMEA/CET → UK → Global, remote-first within tier
     sorted_jobs = sort_jobs(deduped)
 
+    # Compare with previous run to detect new jobs
+    previous_keys = load_previous_jobs()
+    sorted_jobs = mark_new_jobs(sorted_jobs, previous_keys)
+    new_count = sum(1 for j in sorted_jobs if j.get('is_new'))
+    total_unchanged = len(previous_keys) > 0 and new_count == 0
+
+    if total_unchanged:
+        print(f"No new jobs since last run (all {len(sorted_jobs)} unchanged)")
+    else:
+        print(f"New jobs: {new_count} / {len(sorted_jobs)} total")
+
+    # Save current jobs for next run comparison
+    save_current_jobs(sorted_jobs)
+
     # Build HTML and send
-    html = build_html(sorted_jobs)
+    html = build_html(sorted_jobs, new_count=new_count, total_unchanged=total_unchanged)
     send_email(html)
 
 
