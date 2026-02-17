@@ -530,7 +530,7 @@ def create_job_report():
     print("Fetching hot jobs from LinkedIn...")
     hot_jobs_by_category = fetch_hot_jobs(tracker)
     hot_jobs_total = sum(len(jobs) for jobs in hot_jobs_by_category.values())
-    print(f"Hot jobs: {hot_jobs_total} new listings across {len(hot_jobs_by_category)} categories")
+    print(f"Hot jobs: {hot_jobs_total} listings across {len(hot_jobs_by_category)} categories")
     hot_jobs_html = build_hot_jobs_html(hot_jobs_by_category)
 
     # Merge tracker companies into COMPANIES_BY_ROLE
@@ -792,5 +792,42 @@ def main():
     from resume_tailor import run_tailor
     run_tailor()
 
+def run_hot_jobs_only():
+    """Standalone hot jobs check - prints to console, no email."""
+    import sys
+    print("=== Hot Jobs Check ===")
+    tracker = read_application_tracker()
+    print(f"Tracker: {len(tracker)} companies\n")
+
+    hot_jobs_by_category = fetch_hot_jobs(tracker)
+    total = sum(len(jobs) for jobs in hot_jobs_by_category.values())
+
+    if not hot_jobs_by_category:
+        print("No hot jobs found.")
+        return
+
+    tier_labels = {0: '[Paris]', 1: '[France]', 2: '[EMEA]', 3: '[Other]'}
+
+    print(f"\n{'='*60}")
+    print(f"  {total} Hot Jobs across {len(hot_jobs_by_category)} categories")
+    print(f"{'='*60}\n")
+
+    for category, jobs in hot_jobs_by_category.items():
+        print(f"  {category} ({len(jobs)})")
+        print(f"  {'-'*40}")
+        for job in jobs:
+            tier = get_hot_job_location_tier(job['location'])
+            label = tier_labels.get(tier, '')
+            print(f"    {job['company']}")
+            print(f"      {job['title']}")
+            print(f"      {label} {job['location']}")
+            print(f"      {job['url']}")
+            print()
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+    if '--hot-jobs' in sys.argv:
+        run_hot_jobs_only()
+    else:
+        main()
