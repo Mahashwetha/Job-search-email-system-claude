@@ -337,8 +337,12 @@ DEFAULT_HOT_JOB_QUERIES = {
         ('backend+java+developer', 'Paris, France'),
         ('backend+java+developer', 'France'),
         ('lead+backend+engineer', 'France'),
+        ('lead+backend+engineer', 'Paris, France'),
         ('java+backend+engineer', 'Paris, France'),
         ('spring+boot+developer', 'Paris, France'),
+        ('tech+lead+java', 'Paris, France'),
+        ('tech+lead+java', 'France'),
+        ('lead+java+developer', 'Paris, France'),
     ],
     'Product Owner': [
         ('product+owner', 'Paris, France'),
