@@ -228,6 +228,53 @@ After sending the daily email, the system automatically generates LinkedIn outre
 python outreach_drafter.py
 ```
 
+## Hot Jobs
+
+The daily email includes a **Hot Jobs** section that surfaces fresh LinkedIn listings you haven't seen or applied to yet. It shows 5 jobs per role category (Senior Java, Backend Java, Product Owner), sorted by location priority (Paris > France > EMEA).
+
+**How it works:**
+- Fetches from LinkedIn's guest API (search card data: company, title, location, URL)
+- Maintains a **sticky list** — the same 5 jobs persist across runs until you act on them
+- When you add a company to your Excel tracker, that job drops out and gets backfilled with a fresh one
+- Only fetches from LinkedIn when there are empty slots to fill (fast repeat runs)
+- Shown as an orange-themed section at the top of the daily email
+
+**Standalone check (no email sent):**
+```bash
+python daily_job_search.py --hot-jobs
+```
+
+**Remove a bad listing** (e.g. closed, wrong language) and blocklist it:
+```bash
+python daily_job_search.py --hot-jobs --remove "Company" "Role title"
+```
+Only that specific company+role pair is blocklisted. Other roles from the same company can still appear.
+
+**Refresh all categories** (clear and re-fetch):
+```bash
+python daily_job_search.py --hot-jobs --refresh
+```
+
+**Refresh one category:**
+```bash
+python daily_job_search.py --hot-jobs --refresh "Senior Java"
+```
+
+**Customize queries** in `config.py` (optional — defaults are used if omitted):
+```python
+HOT_JOB_QUERIES = {
+    'Senior Java': [
+        ('senior+java+developer', 'Paris, France'),
+        ('senior+java+developer', 'France'),
+    ],
+    'Product Owner': [
+        ('product+owner', 'Paris, France'),
+    ],
+}
+```
+
+**Note:** The LinkedIn guest API only returns card-level data (title, company, location, URL) — it does not read full job descriptions. Some irrelevant listings may appear; use `--remove` to blocklist them.
+
 ## Resume Tailor
 
 Automatically generates per-company tailored resumes using **Gemini 2.5 Flash** (free tier, $0 cost). Runs at the end of the daily pipeline, after outreach drafts.
