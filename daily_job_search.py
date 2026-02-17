@@ -337,6 +337,12 @@ DEFAULT_HOT_JOB_QUERIES = {
         ('product+owner', 'Paris, France'),
         ('product+owner', 'France'),
     ],
+    'Assistant Project Manager': [
+        ('assistant+project+manager', 'Paris, France'),
+        ('assistant+project+manager', 'France'),
+        ('assistant+project+manager+java', 'Paris, France'),
+        ('assistant+project+manager+java', 'France'),
+    ],
 }
 
 

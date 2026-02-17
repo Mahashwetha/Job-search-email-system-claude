@@ -86,6 +86,10 @@ REMOTE_LOCATION_EXCLUDE = [
 #         ('product+owner', 'Paris, France'),
 #         ('product+owner', 'France'),
 #     ],
+#     'Assistant Project Manager': [
+#         ('assistant+project+manager', 'Paris, France'),
+#         ('assistant+project+manager', 'France'),
+#     ],
 # }
 
 # How to get Gmail App Password:
