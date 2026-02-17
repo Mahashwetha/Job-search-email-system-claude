@@ -5,6 +5,7 @@ An end-to-end automated job search pipeline that handles everything from finding
 ## Features
 
 - **Daily Email Reports** - Styled HTML emails at 11:00 AM CET with companies grouped by role and status
+- **Hot Jobs Section** - Sticky top-5-per-category LinkedIn listings (Senior Java, Backend Java, Product Owner) that persist until you add a company to your tracker, then backfill just that slot
 - **Remote Job Scanner** - Fetches from RemoteOK, Remotive, and Arbeitnow APIs every 2 days, filters for EMEA-compatible roles
 - **Resume Tailor** - Per-company tailored resumes using Gemini 2.5 Flash (free tier) — never fabricates, only reorders and surfaces existing skills
 - **Outreach Drafter** - Auto-generates short/medium/long LinkedIn message templates for each applied company
@@ -279,6 +280,7 @@ Excel Tracker (List.xlsx)
     │
     ├── daily_job_search.py ──→ HTML email (11:00 AM daily)
     │       │
+    │       ├── Hot Jobs ──→ LinkedIn guest API (sticky top-5 per category)
     │       ├── outreach_drafter.py ──→ LinkedIn message drafts
     │       └── resume_tailor.py ──→ Tailored DOCX resumes
     │               │
@@ -294,7 +296,8 @@ Excel Tracker (List.xlsx)
 
 ```
 claude-job-agent/
-├── daily_job_search.py                # Main daily pipeline (email + outreach + resume)
+├── daily_job_search.py                # Main daily pipeline (hot jobs + email + outreach + resume)
+├── daily_hot_jobs.json                # Sticky hot jobs state (auto-generated, gitignored)
 ├── outreach_drafter.py                # LinkedIn outreach draft generator
 ├── resume_tailor.py                   # Per-company resume tailoring via Gemini AI
 ├── remote_search/
@@ -319,10 +322,11 @@ claude-job-agent/
 
 ### Daily Pipeline (11:00 AM)
 1. **Read Excel** - Loads your application tracker for statuses, role links, and HR contacts
-2. **Organize** - Groups companies by role and status (Not Contacted / Review / Applied / Rejected)
-3. **Send Email** - Styled HTML report via Gmail SMTP with clickable links and HR contacts
-4. **Outreach Drafts** - LinkedIn message templates for applied companies with HR contacts
-5. **Resume Tailor** - Tailored DOCX resumes via Gemini AI for companies with fetchable job links
+2. **Fetch Hot Jobs** - Queries LinkedIn for fresh listings per role category, filters out tracker companies, keeps a sticky top-5 list per category (only backfills when a slot opens)
+3. **Organize** - Groups companies by role and status (Not Contacted / Review / Applied / Rejected)
+4. **Send Email** - Styled HTML report via Gmail SMTP with hot jobs section + clickable links and HR contacts
+5. **Outreach Drafts** - LinkedIn message templates for applied companies with HR contacts
+6. **Resume Tailor** - Tailored DOCX resumes via Gemini AI for companies with fetchable job links
 
 ### Remote Job Scanner (every 2 days, 12:00 PM)
 1. **Fetch** - Pulls listings from RemoteOK, Remotive, and Arbeitnow APIs
