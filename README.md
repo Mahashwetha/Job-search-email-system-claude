@@ -5,7 +5,7 @@ An end-to-end automated job search pipeline that handles everything from finding
 ## Features
 
 - **Daily Email Reports** - Styled HTML emails at 11:00 AM CET with companies grouped by role and status
-- **Hot Jobs Section** - Sticky top-5-per-category LinkedIn listings (Senior Java, Backend Java, Product Owner) that persist until you add a company to your tracker, then backfill just that slot
+- **Hot Jobs Section** - Sticky top-5-per-category LinkedIn listings (fully configurable role categories) that persist until you add a company to your tracker, then backfill just that slot
 - **Remote Job Scanner** - Fetches from RemoteOK, Remotive, and Arbeitnow APIs every 2 days, filters for EMEA-compatible roles
 - **Resume Tailor** - Per-company tailored resumes using Gemini 2.5 Flash (free tier) — never fabricates, only reorders and surfaces existing skills
 - **Outreach Drafter** - Auto-generates short/medium/long LinkedIn message templates for each applied company
@@ -31,9 +31,8 @@ EMEA-compatible remote roles from RemoteOK, Remotive, and Arbeitnow APIs, filter
 ## What You Get
 
 ### Roles Tracked
-1. **Software Developer (Java) - SENIOR/EXPERT** (8+ years)
-2. **Backend Java Developer - SENIOR** (5-8+ years)
-3. **Product Owner** (Senior level)
+
+Roles are defined in `daily_job_search.py` — edit them to match your job search. The default setup includes Java backend and product management roles, but any stack or function works. Each role maps to a set of job board search links and hot jobs queries.
 
 ### Status Tracking
 - ⬜ Not Contacted
@@ -230,7 +229,7 @@ python outreach_drafter.py
 
 ## Hot Jobs
 
-The daily email includes a **Hot Jobs** section that surfaces fresh LinkedIn listings you haven't seen or applied to yet. It shows 5 jobs per role category (Senior Java, Backend Java, Product Owner, Assistant Project Manager), sorted by location priority (Paris > France > EMEA).
+The daily email includes a **Hot Jobs** section that surfaces fresh LinkedIn listings you haven't seen or applied to yet. It shows 5 jobs per role category (fully configurable), sorted by location priority (City > Country > Region).
 
 **How it works:**
 - Fetches from LinkedIn's guest API (search card data: company, title, location, URL)
@@ -263,17 +262,22 @@ python daily_job_search.py --hot-jobs --refresh "Senior Java"
 **Customize queries** in `config.py` (optional — defaults are used if omitted):
 ```python
 HOT_JOB_QUERIES = {
-    'Senior Java': [
-        ('senior+java+developer', 'Paris, France'),
-        ('senior+java+developer', 'France'),
+    'Senior Backend': [
+        ('senior+backend+developer', 'YourCity, YourCountry'),
+        ('senior+software+engineer', 'YourCountry'),
     ],
-    'Product Owner': [
-        ('product+owner', 'Paris, France'),
+    'Product Manager': [
+        ('product+manager', 'YourCity, YourCountry'),
     ],
 }
 ```
 
-**Title filter (Assistant Project Manager):** This category only surfaces IT/tech-relevant roles. Titles must contain at least one of: java, it, si, informatique, digital, data, web, cloud, devops, cyber. Non-IT roles (fashion, supply chain, etc.) are automatically filtered out.
+**Per-category title filter** (`HOT_JOB_TITLE_FILTERS` in `daily_job_search.py`): Optionally restrict a category to only show titles containing specific keywords. Useful for broad searches (e.g. "project manager") where you only want IT/tech results:
+```python
+HOT_JOB_TITLE_FILTERS = {
+    'Project Manager': ['java', 'it', 'software', 'data', 'digital', 'cloud'],
+}
+```
 
 **Note:** The LinkedIn guest API only returns card-level data (title, company, location, URL) — it does not read full job descriptions. Some irrelevant listings may appear; use `--remove` to blocklist them.
 
@@ -405,7 +409,7 @@ REMOTE_ROLE_KEYWORDS = ['java', 'backend', 'software engineer', 'devops', 'pytho
 
 REMOTE_LOCATION_INCLUDE = [
     'worldwide', 'anywhere', 'emea', 'europe', 'remote', 'global',
-    'france', 'paris',  # ← Add your country/city
+    'yourcountry', 'yourcity',  # ← Add your country/city
 ]
 
 REMOTE_LOCATION_EXCLUDE = ['us only', 'us timezone', 'americas only']
@@ -430,8 +434,8 @@ If omitted, sensible defaults are used (see `config.template.py`).
 Open `daily_job_search.py` and update lines 15-16:
 
 ```python
-LOCATION_CITY = "Paris"         # ← Change to your city (e.g., "London", "Berlin")
-LOCATION_COUNTRY = "France"     # ← Change to your country (e.g., "UK", "Germany")
+LOCATION_CITY = "YourCity"         # e.g. "London", "Berlin", "Amsterdam"
+LOCATION_COUNTRY = "YourCountry"   # e.g. "UK", "Germany", "Netherlands"
 ```
 
 This automatically updates:
@@ -550,4 +554,4 @@ For issues or questions:
 
 ---
 
-**Built with Claude Code** | **Last Updated:** 2026-02-16
+**Built with Claude Code** | **Last Updated:** 2026-02-18
