@@ -230,7 +230,7 @@ python outreach_drafter.py
 
 ## Hot Jobs
 
-The daily email includes a **Hot Jobs** section that surfaces fresh LinkedIn listings you haven't seen or applied to yet. It shows 5 jobs per role category (Senior Java, Backend Java, Product Owner), sorted by location priority (Paris > France > EMEA).
+The daily email includes a **Hot Jobs** section that surfaces fresh LinkedIn listings you haven't seen or applied to yet. It shows 5 jobs per role category (Senior Java, Backend Java, Product Owner, Assistant Project Manager), sorted by location priority (Paris > France > EMEA).
 
 **How it works:**
 - Fetches from LinkedIn's guest API (search card data: company, title, location, URL)
@@ -272,6 +272,8 @@ HOT_JOB_QUERIES = {
     ],
 }
 ```
+
+**Title filter (Assistant Project Manager):** This category only surfaces IT/tech-relevant roles. Titles must contain at least one of: java, it, si, informatique, digital, data, web, cloud, devops, cyber. Non-IT roles (fashion, supply chain, etc.) are automatically filtered out.
 
 **Note:** The LinkedIn guest API only returns card-level data (title, company, location, URL) — it does not read full job descriptions. Some irrelevant listings may appear; use `--remove` to blocklist them.
 
@@ -336,7 +338,9 @@ Excel Tracker (List.xlsx)
     └── remote_search/
             └── remote_job_search.py ──→ HTML email (every 2 days at 12:00 PM)
                     │
-                    └── RemoteOK + Remotive + Arbeitnow APIs
+                    ├── RemoteOK + Remotive + Arbeitnow + WWR + Jobicy APIs
+                    ├── LinkedIn France (remote f_WT=2 filter)
+                    └── LinkedIn Global (India/Boston/NY + EMEA description verification)
 ```
 
 ## File Structure
@@ -376,10 +380,19 @@ claude-job-agent/
 6. **Resume Tailor** - Tailored DOCX resumes via Gemini AI for companies with fetchable job links
 
 ### Remote Job Scanner (every 2 days, 12:00 PM)
-1. **Fetch** - Pulls listings from RemoteOK, Remotive, and Arbeitnow APIs
-2. **Filter** - Matches role keywords + location-compatible positions (configurable in `config.py`)
-3. **Dedup** - Removes duplicates by company+title across sources
-4. **Send Email** - Styled HTML table sorted by posted date
+1. **Fetch** - Pulls listings from RemoteOK, Remotive, Arbeitnow, WWR, Jobicy, LinkedIn France, and LinkedIn Global (India/Boston/NY)
+2. **EMEA Verification** - For LinkedIn Global jobs, fetches each job's full description and checks for explicit EMEA timezone signals (`emea`, `cet`, `work from anywhere`, `any timezone`, etc.). Rejects US-only or no-timezone-info jobs.
+3. **Filter** - Matches role keywords + location-compatible positions (configurable in `config.py`)
+4. **Dedup** - Removes duplicates by company+title across sources
+5. **Send Email** - Styled HTML table sorted by location tier (Paris → France → EMEA → UK → Global), new jobs highlighted in green
+
+**Remove an irrelevant remote job** so it never appears again — tell Claude the company and role title, and it adds an entry to `REMOTE_BLOCKLIST` in `remote_job_search.py`:
+```python
+REMOTE_BLOCKLIST = [
+    ("hopper", "sr. software engineer"),   # exact company + title (lowercased)
+    ("somecompany", ""),                   # "" blocks ALL roles from this company
+]
+```
 
 ## Customization
 
