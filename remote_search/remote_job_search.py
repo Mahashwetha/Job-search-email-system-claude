@@ -10,6 +10,7 @@ import sys
 import os
 import re
 import json
+import time
 import smtplib
 import requests
 import xml.etree.ElementTree as ET
@@ -58,6 +59,19 @@ EU_FOCUSED_SOURCES = ['Arbeitnow']
 
 # Sources where "Remote" without region is common — allow if no US indicators found
 RELAXED_LOCATION_SOURCES = ['Jobicy']
+
+# Sources searched with EMEA keywords — bypass LOCATION_EXCLUDE (already pre-filtered)
+EMEA_SEARCHED_SOURCES = ['LinkedIn Global']
+
+# ── Remote Job Blocklist ──
+# Jobs to permanently hide. Each entry is (company_substring, title_substring) — both lowercased.
+# Leave title empty ("") to block all roles from that company.
+# Tell Claude "remove X from remote jobs" to add entries here.
+REMOTE_BLOCKLIST = [
+    # Examples:
+    # ("hopper", "sr. software engineer"),
+    # ("somecompany", ""),  # blocks all roles from this company
+]
 
 # Roles to exclude even if they match keywords above
 ROLE_EXCLUDE = [
@@ -363,6 +377,123 @@ def fetch_linkedin_france():
     return jobs
 
 
+def _check_emea_timezone_in_description(job_id):
+    """Fetch LinkedIn job description and check for explicit EMEA timezone compatibility.
+
+    Returns: 'emea' | 'us_only' | 'unknown'
+    - emea: explicit EMEA/Europe/flexible timezone signals found
+    - us_only: US-only timezone signals found → reject
+    - unknown: no timezone info found → reject (too risky)
+    """
+    try:
+        url = f'https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}'
+        resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
+        if resp.status_code != 200:
+            return 'unknown'
+
+        match = re.search(r'show-more-less-html__markup[^>]*>(.*?)</div', resp.text, re.DOTALL)
+        if not match:
+            return 'unknown'
+
+        text = re.sub(r'<[^>]+>', ' ', match.group(1)).lower()
+        text = ' '.join(text.split())
+
+        # Explicit EMEA/flexible timezone signals (employee location, not company market)
+        emea_signals = [
+            'emea', 'europe timezone', 'european timezone',
+            'cet', 'cest', 'utc+1', 'utc+2', 'gmt+1', 'gmt+2',
+            'work from anywhere', 'work from any', 'anywhere in the world',
+            'any timezone', 'flexible timezone', 'flexible time zone',
+            'all timezones', 'all time zones', 'open to all locations',
+            'location agnostic', 'location-agnostic', 'fully distributed',
+        ]
+        # US/North America only signals
+        us_only_signals = [
+            'us timezone', 'us time zone', 'must be in the us', 'must be us',
+            'must reside in', 'must be located in', 'must be based in the us',
+            'north america only', 'us-based only', 'usa only',
+            'eastern time zone', 'pacific time zone', 'mountain time zone',
+            'central time zone', 'est timezone', 'pst timezone',
+            'eastern or pacific', 'et/pt', 'et or pt',
+        ]
+
+        if any(s in text for s in us_only_signals):
+            return 'us_only'
+        if any(s in text for s in emea_signals):
+            return 'emea'
+        return 'unknown'
+    except Exception:
+        return 'unknown'
+
+
+def fetch_linkedin_global():
+    """Fetch backend/Java jobs in India, Boston, New York — verified EMEA timezone compatible."""
+    candidates = []
+    searches = [
+        # (keywords, location)
+        ('java+backend+EMEA', 'India'),
+        ('software+engineer+EMEA', 'India'),
+        ('backend+engineer+EMEA', 'India'),
+        ('java+backend+EMEA', 'Boston, MA'),
+        ('software+engineer+EMEA', 'Boston, MA'),
+        ('java+backend+EMEA', 'New York, NY'),
+        ('software+engineer+EMEA', 'New York, NY'),
+        ('backend+engineer+global+remote', 'India'),
+        ('backend+engineer+global+remote', 'New York, NY'),
+        ('backend+engineer+global+remote', 'Boston, MA'),
+    ]
+    seen_urls = set()
+    for query, location in searches:
+        try:
+            url = (
+                f'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search'
+                f'?keywords={query}&location={location.replace(" ", "+")}&f_WT=2&start=0'
+            )
+            resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
+            if resp.status_code != 200:
+                continue
+
+            titles = re.findall(r'base-search-card__title[^>]*>([^<]+)<', resp.text)
+            companies = re.findall(r'base-search-card__subtitle[^>]*>[^<]*<a[^>]*>([^<]+)<', resp.text)
+            locations = re.findall(r'job-search-card__location[^>]*>([^<]+)<', resp.text)
+            links = re.findall(r'href="(https://(?:fr|www|in)\.linkedin\.com/jobs/view/[^"]+)"', resp.text)
+
+            for i in range(min(len(titles), len(companies), len(locations), len(links))):
+                clean_url = unescape(links[i]).split('?')[0]
+                if clean_url in seen_urls:
+                    continue
+                seen_urls.add(clean_url)
+                candidates.append({
+                    'company': companies[i].strip(),
+                    'title': titles[i].strip(),
+                    'url': clean_url,
+                    'source': 'LinkedIn Global',
+                    'location': locations[i].strip(),
+                    'tags': 'EMEA-verified',
+                    'posted_date': datetime.now().strftime('%Y-%m-%d'),
+                })
+        except Exception as e:
+            print(f"  LinkedIn Global error ({query}, {location}): {e}")
+
+    # Verify EMEA timezone compatibility by checking each job description
+    jobs = []
+    print(f"  LinkedIn Global: {len(candidates)} candidates — verifying EMEA timezone...")
+    for job in candidates:
+        job_id_match = re.search(r'/jobs/view/[^/]+-(\d+)$', job['url'])
+        if not job_id_match:
+            continue
+        job_id = job_id_match.group(1)
+        result = _check_emea_timezone_in_description(job_id)
+        if result == 'emea':
+            jobs.append(job)
+        time.sleep(1)  # rate limit
+
+    print(f"  LinkedIn Global (India/Boston/NY): {len(jobs)} EMEA-compatible jobs (from {len(candidates)} candidates)")
+
+    print(f"  LinkedIn Global (India/Boston/NY): {len(jobs)} jobs fetched")
+    return jobs
+
+
 # Known EMEA tech companies → country (for enriching "Remote" listings)
 KNOWN_COMPANY_COUNTRIES = {
     'tines': 'Ireland', 'intercom': 'Ireland', 'stripe': 'Ireland/US',
@@ -435,6 +566,18 @@ def filter_jobs(jobs):
         tags_lower = job['tags'].lower()
         search_text = f"{title_lower} {tags_lower}"
 
+        # Check REMOTE_BLOCKLIST
+        company_lower = job['company'].lower()
+        blocklisted = False
+        for bl_company, bl_title in REMOTE_BLOCKLIST:
+            if bl_company and bl_company not in company_lower:
+                continue
+            if bl_title == '' or bl_title in title_lower:
+                blocklisted = True
+                break
+        if blocklisted:
+            continue
+
         # Exclude roles that need ML/data science, are frontend, devops, etc.
         if any(ex in search_text for ex in ROLE_EXCLUDE):
             continue
@@ -455,9 +598,11 @@ def filter_jobs(jobs):
             continue
 
         # Strictly exclude jobs only targeting excluded regions
+        # (skip for EMEA-searched sources — they were fetched with EMEA keywords)
         loc_tags = f"{location_lower} {tags_lower}"
-        if any(ex in loc_tags for ex in LOCATION_EXCLUDE):
-            continue
+        if job.get('source') not in EMEA_SEARCHED_SOURCES:
+            if any(ex in loc_tags for ex in LOCATION_EXCLUDE):
+                continue
 
         # Exclude US flag emoji
         if '\U0001f1fa\U0001f1f8' in job['location']:
@@ -600,7 +745,7 @@ def build_html(jobs, new_count=0, total_unchanged=False):
     if not jobs:
         rows_html = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#7f8c8d;">No matching remote roles found this run.</td></tr>\n'
 
-    sources = 'RemoteOK, Remotive, Arbeitnow, WWR, Jobicy, LinkedIn FR'
+    sources = 'RemoteOK, Remotive, Arbeitnow, WWR, Jobicy, LinkedIn FR, LinkedIn Global'
     html = f"""
     <html>
     <head>
@@ -685,6 +830,7 @@ def main():
     all_jobs.extend(fetch_weworkremotely())
     all_jobs.extend(fetch_jobicy())
     all_jobs.extend(fetch_linkedin_france())
+    all_jobs.extend(fetch_linkedin_global())
     print(f"Total fetched: {len(all_jobs)}")
 
     # Enrich location info for vague "Remote" listings
