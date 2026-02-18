@@ -356,14 +356,43 @@ DEFAULT_HOT_JOB_QUERIES = {
         ('assistant+chef+de+projet+informatique', 'Paris, France'),
         ('assistant+chef+de+projet+SI', 'Paris, France'),
     ],
+    'Tech Lead / Lead Developer': [
+        ('tech+lead+java', 'Paris, France'),
+        ('tech+lead+backend', 'Paris, France'),
+        ('lead+developer+java', 'Paris, France'),
+        ('lead+software+engineer', 'Paris, France'),
+        ('tech+lead+java', 'France'),
+        ('lead+developer+java', 'France'),
+        ('lead+software+engineer', 'France'),
+        ('tech+lead+backend', 'France'),
+        ('tech+lead+java', 'Europe'),
+        ('lead+software+engineer+java', 'Europe'),
+        ('lead+developer+java', 'Europe'),
+    ],
 }
 
-# Per-category title filters: job title must contain at least one keyword (case-insensitive).
-# Categories not listed here accept all titles.
+# Per-category title filters.
+# HOT_JOB_TITLE_FILTERS: title must contain at least one keyword (OR).
+# HOT_JOB_TITLE_REQUIRED: title must ALSO contain at least one keyword (AND, applied on top of FILTERS).
+_JAVA_OOP_ENGLISH = ['java', 'kotlin', 'object oriented', 'orienté objet', 'english', 'anglais']
+
 HOT_JOB_TITLE_FILTERS = {
+    'Senior Java': ['senior', 'engineer', 'developer', 'développeur', 'architect'] + _JAVA_OOP_ENGLISH,
+    'Backend Java': ['backend', 'back-end', 'back end', 'engineer', 'developer', 'développeur'] + _JAVA_OOP_ENGLISH,
+    'Product Owner': ['product owner', 'product manager', 'chef de produit'],
     'Assistant Project Manager': ['java', 'software', ' it ', ' si ', 'informatique', 'digital',
                                   'data', 'développeur', 'developer', 'système d\'information',
                                   'web', 'cloud', 'devops', 'cyber'],
+    'Tech Lead / Lead Developer': ['tech lead', 'lead developer', 'lead engineer', 'lead software',
+                                   'lead backend', 'technical lead', 'développeur lead'],
+}
+
+# These categories require the job *description* to contain at least one of these keywords.
+# Title is NOT checked for these — only the fetched description.
+HOT_JOB_DESC_REQUIRED = {
+    'Product Owner': _JAVA_OOP_ENGLISH,
+    'Assistant Project Manager': _JAVA_OOP_ENGLISH,
+    'Tech Lead / Lead Developer': _JAVA_OOP_ENGLISH,
 }
 
 
@@ -395,6 +424,26 @@ def fetch_linkedin_jobs(keywords, location):
     except Exception as e:
         print(f"  LinkedIn hot jobs error ({keywords}, {location}): {e}")
     return jobs
+
+
+def fetch_linkedin_job_description(url):
+    """Fetch the full description text of a LinkedIn job posting via the guest API."""
+    try:
+        job_id_match = re.search(r'-(\d+)(?:\?|$)', url)
+        if not job_id_match:
+            return ''
+        job_id = job_id_match.group(1)
+        api_url = f'https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}'
+        resp = requests.get(api_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
+        if resp.status_code != 200:
+            return ''
+        match = re.search(r'show-more-less-html__markup[^>]*>(.*?)</div', resp.text, re.DOTALL)
+        if not match:
+            return ''
+        text = re.sub(r'<[^>]+>', ' ', match.group(1))
+        return ' '.join(text.split()).lower()
+    except Exception:
+        return ''
 
 
 def get_hot_job_location_tier(location):
@@ -475,9 +524,18 @@ def fetch_hot_jobs(tracker):
 
     hot_jobs_by_category = {}
 
+    # Global dedup: track URLs/keys already assigned to any category
+    global_urls = set()
+    global_keys = set()
+    for cat_jobs in current.values():
+        for j in cat_jobs:
+            global_urls.add(j['url'])
+            global_keys.add((j['company'].lower().strip(), j['title'].lower().strip()))
+
     for category, query_list in queries.items():
         # Optional title filter for this category
         title_filter = HOT_JOB_TITLE_FILTERS.get(category)
+        desc_required = HOT_JOB_DESC_REQUIRED.get(category)
 
         # Start with existing sticky list for this category
         existing = current.get(category, [])
@@ -487,6 +545,8 @@ def fetch_hot_jobs(tracker):
         for job in existing:
             if _is_in_tracker(job['company'].lower().strip(), tracker_names):
                 print(f"  [{category}] Removed '{job['company']}' (now in tracker)")
+                global_urls.discard(job['url'])
+                global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
             else:
                 kept.append(job)
 
@@ -495,11 +555,8 @@ def fetch_hot_jobs(tracker):
         # Only fetch from LinkedIn if we have empty slots
         if slots_needed > 0:
             print(f"  [{category}] {len(kept)} kept, need {slots_needed} more - fetching LinkedIn...")
-            # Collect existing URLs/keys to avoid duplicates
-            existing_keys = set(
-                (j['company'].lower().strip(), j['title'].lower().strip()) for j in kept
-            )
-            existing_urls = set(j['url'] for j in kept)
+            existing_urls = global_urls
+            existing_keys = global_keys
 
             candidates = []
             for keywords, location in query_list:
@@ -525,19 +582,39 @@ def fetch_hot_jobs(tracker):
                     candidates.append(job)
                 time.sleep(2)
 
-            # Sort candidates by location tier, pick best ones to fill slots
+            # Sort candidates by location tier
             candidates.sort(key=lambda j: get_hot_job_location_tier(j['location']))
-            kept.extend(candidates[:slots_needed])
+
+            # For description-required categories, fetch each description and filter.
+            # If the fetch returns empty (rate-limited / no match), accept the job
+            # rather than silently dropping it — better to show than miss.
+            if desc_required:
+                filled = 0
+                for job in candidates:
+                    if filled >= slots_needed:
+                        break
+                    desc = fetch_linkedin_job_description(job['url'])
+                    if not desc or any(kw in desc for kw in desc_required):
+                        kept.append(job)
+                        global_urls.add(job['url'])
+                        global_keys.add((job['company'].lower().strip(), job['title'].lower().strip()))
+                        filled += 1
+                    time.sleep(2)
+            else:
+                for job in candidates[:slots_needed]:
+                    kept.append(job)
+                    global_urls.add(job['url'])
+                    global_keys.add((job['company'].lower().strip(), job['title'].lower().strip()))
         else:
             print(f"  [{category}] All 5 slots filled - no fetch needed")
 
-        if kept:
-            hot_jobs_by_category[category] = kept
+        hot_jobs_by_category[category] = kept
 
-    # Save updated sticky list
-    save_hot_jobs_current(hot_jobs_by_category)
+    # Save updated sticky list (preserve original category order from queries dict)
+    ordered = {cat: hot_jobs_by_category.get(cat, []) for cat in queries}
+    save_hot_jobs_current(ordered)
 
-    return hot_jobs_by_category
+    return ordered
 
 
 TIER_BADGES = {0: '🏠 Paris', 1: '🇫🇷 France', 2: '🌍 EMEA', 3: '📍 Other'}
@@ -557,8 +634,9 @@ def build_hot_jobs_html(hot_jobs_by_category):
 """
 
     for category, jobs in hot_jobs_by_category.items():
+        count = len(jobs)
         html += f"""
-        <h3 style="color: #e65100; margin: 8px 0 3px 0; font-size: 12px; padding-left: 5px;">{category} ({len(jobs)} job{'s' if len(jobs) != 1 else ''})</h3>
+        <h3 style="color: #e65100; margin: 8px 0 3px 0; font-size: 12px; padding-left: 5px;">{category} ({count} job{'s' if count != 1 else ''})</h3>
         <table style="border-collapse: collapse; width: 100%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.08); font-size: 11px; margin: 3px 0;">
             <thead>
                 <tr>
@@ -569,10 +647,16 @@ def build_hot_jobs_html(hot_jobs_by_category):
             </thead>
             <tbody>
 """
-        for job in jobs:
-            tier = get_hot_job_location_tier(job['location'])
-            badge = TIER_BADGES.get(tier, '')
-            html += f"""                <tr style="border-bottom: 1px solid #ecf0f1;">
+        if not jobs:
+            html += """                <tr>
+                    <td colspan="3" style="padding: 6px; color: #aaa; font-style: italic; text-align: center;">No new listings found — checking again tomorrow</td>
+                </tr>
+"""
+        else:
+            for job in jobs:
+                tier = get_hot_job_location_tier(job['location'])
+                badge = TIER_BADGES.get(tier, '')
+                html += f"""                <tr style="border-bottom: 1px solid #ecf0f1;">
                     <td style="padding: 4px 6px; font-weight: bold;">{job['company']}</td>
                     <td style="padding: 4px 6px;"><a href="{job['url']}" style="color: #e65100; text-decoration: underline;">{job['title']}</a></td>
                     <td style="padding: 4px 6px;"><span style="background: #fff3e0; padding: 1px 6px; border-radius: 8px; font-size: 9px;">{badge}</span> {job['location']}</td>
