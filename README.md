@@ -555,3 +555,16 @@ For issues or questions:
 ---
 
 **Built with Claude Code** | **Last Updated:** 2026-02-18
+
+---
+
+## Claude Model Compatibility
+
+This project was built and tested with **Claude Code** using:
+
+| Model | Best for |
+|---|---|
+| **Claude Opus 4.6** (`claude-opus-4-6`) | Complex multi-step tasks: designing new features, debugging logic, writing EMEA verification, refactoring filter chains |
+| **Claude Sonnet 4.6** (`claude-sonnet-4-5-20250929`) | Routine edits: blocklist entries, README updates, config tweaks, quick JSON changes |
+
+Both models work fully with this codebase. Switch between them in Claude Code with `/model`.
