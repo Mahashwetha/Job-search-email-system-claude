@@ -732,23 +732,45 @@ def _safe_str(val):
 
 
 def dump_to_excel(jobs):
-    """Write sorted remote jobs to remote.xlsx (standalone — never touches List.xlsx).
+    """Append new remote jobs to remote.xlsx — never removes existing rows.
 
-    Full refresh every run. Handles PermissionError (file open in Excel) via temp file.
+    Jobs already present (matched by company+title) are skipped.
+    Creates the file with a header row if it doesn't exist yet.
+    Handles PermissionError (file open in Excel) via temp file.
     """
     temp_out = None
     try:
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = 'remote'
+        # Load existing file or create fresh
+        if os.path.exists(REMOTE_EXCEL_FILE):
+            try:
+                wb = openpyxl.load_workbook(REMOTE_EXCEL_FILE)
+            except PermissionError:
+                temp_fd, temp_in = tempfile.mkstemp(suffix='.xlsx')
+                os.close(temp_fd)
+                shutil.copy2(REMOTE_EXCEL_FILE, temp_in)
+                wb = openpyxl.load_workbook(temp_in)
+                os.remove(temp_in)
+            ws = wb.active
+        else:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = 'remote'
+            ws.append(EXCEL_HEADERS)
+            for cell in ws[1]:
+                cell.font = openpyxl.styles.Font(bold=True)
 
-        # Header row
-        ws.append(EXCEL_HEADERS)
-        for cell in ws[1]:
-            cell.font = openpyxl.styles.Font(bold=True)
+        # Build set of existing (company, title) keys
+        existing_keys = set()
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            company, title = str(row[0] or '').lower().strip(), str(row[1] or '').lower().strip()
+            existing_keys.add((company, title))
 
-        # Data rows
+        # Append only new jobs
+        added = 0
         for job in jobs:
+            key = (job['company'].lower().strip(), job['title'].lower().strip())
+            if key in existing_keys:
+                continue
             new_flag = 'NEW' if job.get('is_new') else ''
             ws.append([
                 _safe_str(job['company']),
@@ -763,22 +785,24 @@ def dump_to_excel(jobs):
             url_cell = ws.cell(row=ws.max_row, column=3)
             url_cell.hyperlink = job['url']
             url_cell.style = 'Hyperlink'
+            existing_keys.add(key)
+            added += 1
 
         # Auto-width
         for col in ws.columns:
             max_len = max((len(str(cell.value or '')) for cell in col), default=0)
             ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 60)
 
-        # Save — use temp file if remote.xlsx is open in Excel
+        # Save
         try:
             wb.save(REMOTE_EXCEL_FILE)
-            print(f"Excel dump: {len(jobs)} jobs -> remote.xlsx")
+            print(f"Excel dump: {added} new jobs appended -> remote.xlsx (total rows: {ws.max_row - 1})")
         except PermissionError:
             temp_fd, temp_out = tempfile.mkstemp(suffix='.xlsx')
             os.close(temp_fd)
             wb.save(temp_out)
             shutil.copy2(temp_out, REMOTE_EXCEL_FILE)
-            print(f"Excel dump (via temp): {len(jobs)} jobs -> remote.xlsx")
+            print(f"Excel dump (via temp): {added} new jobs appended -> remote.xlsx")
 
     except Exception as e:
         print(f"Warning: Excel dump failed - {e}")
