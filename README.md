@@ -340,7 +340,7 @@ Excel Tracker (List.xlsx)
     │               └── Gemini 2.5 Flash API (free tier)
     │
     └── remote_search/
-            ├── remote_job_search.py ──→ HTML email + Excel 'remote' sheet (every 2 days)
+            ├── remote_job_search.py ──→ HTML email + remote.xlsx append (every 2 days)
             │       │
             │       ├── RemoteOK + Remotive + Arbeitnow + WWR + Jobicy APIs
             │       ├── LinkedIn France (remote f_WT=2 filter)
@@ -393,7 +393,7 @@ claude-job-agent/
 2. **EMEA Verification** - For LinkedIn Global jobs, fetches each job's full description and checks for explicit EMEA timezone signals (`emea`, `cet`, `work from anywhere`, `any timezone`, etc.). Rejects US-only or no-timezone-info jobs.
 3. **Filter** - Matches role keywords + location-compatible positions (configurable in `config.py`)
 4. **Dedup** - Removes duplicates by company+title across sources
-5. **Excel Dump** - Writes all found jobs to the `remote` sheet in `List.xlsx` (full refresh)
+5. **Excel Dump** - Appends new jobs to `remote_search/remote.xlsx` (append-only, never touches `List.xlsx`)
 6. **Send Email** - Styled HTML table sorted by location tier (Paris → France → EMEA → UK → Global), new jobs highlighted in green
 
 **Reject remote jobs** you've reviewed using `reject_remote.py` — entries are stored in `rejected_remote.json` and filtered out on every future run:
@@ -413,9 +413,15 @@ python remote_search/reject_remote.py --list
 # Show all commands
 python remote_search/reject_remote.py --help
 ```
+
+**Test runs** — use `--no-save` to avoid consuming the NEW flag before the scheduled run:
+```bash
+python remote_search/remote_job_search.py --no-save
+```
+Excel still gets appended; `previous_jobs.json` is left untouched.
 Leave title as `""` to reject all roles from a company. Entries are matched as lowercase substrings.
 
-**Excel dump** — each run writes all found remote jobs to a `remote` sheet in your `List.xlsx` tracker (columns: Company, Role, URL, Source, Location, Tags, Posted, New?). Full refresh every run.
+**Excel dump** — each run appends new remote jobs to `remote_search/remote.xlsx` (standalone file, never touches `List.xlsx`). Columns: Company, Role, URL, Source, Location, Tags, Posted, New?. Append-only — existing rows are never removed, deduped by company+title.
 
 ## Customization
 
