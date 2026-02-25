@@ -924,9 +924,11 @@ def send_email(html_content):
 
 # ============= MAIN =============
 
-def main():
+def main(no_save=False):
     print("=== Remote Job Search ===")
     print(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    if no_save:
+        print("Mode: TEST (previous_jobs.json will NOT be updated)")
 
     # Fetch from all sources
     print("Fetching jobs...")
@@ -964,8 +966,11 @@ def main():
     else:
         print(f"New jobs: {new_count} / {len(sorted_jobs)} total")
 
-    # Save current jobs for next run comparison
-    save_current_jobs(sorted_jobs)
+    # Save current jobs for next run comparison (skip on test runs)
+    if no_save:
+        print("Skipping previous_jobs.json update (--no-save)")
+    else:
+        save_current_jobs(sorted_jobs)
 
     # Dump to Excel tracker ('remote' sheet)
     dump_to_excel(sorted_jobs)
@@ -976,4 +981,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--no-save', action='store_true',
+                        help='Skip updating previous_jobs.json (use for test runs to keep NEW flags intact for the next scheduled run)')
+    args = parser.parse_args()
+    main(no_save=args.no_save)
