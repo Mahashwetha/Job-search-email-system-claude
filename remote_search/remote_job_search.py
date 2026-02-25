@@ -11,9 +11,12 @@ import os
 import re
 import json
 import time
+import shutil
 import smtplib
+import tempfile
 import requests
 import xml.etree.ElementTree as ET
+import openpyxl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
@@ -24,7 +27,7 @@ from html import unescape
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 try:
-    from config import EMAIL_CONFIG
+    from config import EMAIL_CONFIG, TRACKER_FILE
 except ImportError:
     print("ERROR: config.py not found!")
     print("Please copy config.template.py to config.py and fill in your details.")
@@ -63,15 +66,20 @@ RELAXED_LOCATION_SOURCES = ['Jobicy']
 # Sources searched with EMEA keywords — bypass LOCATION_EXCLUDE (already pre-filtered)
 EMEA_SEARCHED_SOURCES = ['LinkedIn Global']
 
-# ── Remote Job Blocklist ──
-# Jobs to permanently hide. Each entry is (company_substring, title_substring) — both lowercased.
-# Leave title empty ("") to block all roles from that company.
-# Tell Claude "remove X from remote jobs" to add entries here.
-REMOTE_BLOCKLIST = [
-    # Examples:
-    # ("hopper", "sr. software engineer"),
-    # ("somecompany", ""),  # blocks all roles from this company
-]
+# ── Rejected Remote List ──
+# Loaded from rejected_remote.json — use reject_remote.py to add entries.
+# Each entry is [company_substring, title_substring] — both lowercased.
+# To review a job again, run: python reject_remote.py --remove "company" "title"
+_REJECTED_FILE = os.path.join(os.path.dirname(__file__), 'rejected_remote.json')
+
+def _load_rejected():
+    try:
+        with open(_REJECTED_FILE, 'r', encoding='utf-8') as f:
+            return [tuple(e) for e in json.load(f)]
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+REJECTED_REMOTE_LIST = _load_rejected()
 
 # Roles to exclude even if they match keywords above
 ROLE_EXCLUDE = [
@@ -566,10 +574,10 @@ def filter_jobs(jobs):
         tags_lower = job['tags'].lower()
         search_text = f"{title_lower} {tags_lower}"
 
-        # Check REMOTE_BLOCKLIST
+        # Check REJECTED_REMOTE_LIST
         company_lower = job['company'].lower()
         blocklisted = False
-        for bl_company, bl_title in REMOTE_BLOCKLIST:
+        for bl_company, bl_title in REJECTED_REMOTE_LIST:
             if bl_company and bl_company not in company_lower:
                 continue
             if bl_title == '' or bl_title in title_lower:
@@ -702,6 +710,99 @@ def mark_new_jobs(jobs, previous_keys):
         key = (job['company'].lower().strip(), job['title'].lower().strip())
         job['is_new'] = key not in previous_keys
     return jobs
+
+
+# ============= EXCEL DUMP =============
+
+EXCEL_HEADERS = ['Company', 'Role', 'URL', 'Source', 'Location', 'Tags', 'Posted', 'New?']
+SHEET_NAME = 'remote'
+
+
+def _safe_str(val):
+    """Return a string safe for Excel cells — replaces chars that Windows codepage can't encode."""
+    if not isinstance(val, str):
+        return val
+    return (val
+            .replace('\u2192', '->')   # →
+            .replace('\u2190', '<-')   # ←
+            .replace('\u2022', '*')    # •
+            .replace('\u2013', '-')    # –
+            .replace('\u2014', '-')    # —
+            .encode('cp1252', errors='replace').decode('cp1252'))
+
+
+def dump_to_excel(jobs):
+    """Write sorted remote jobs to the 'remote' sheet in the tracker Excel file.
+
+    - Creates the sheet if it doesn't exist.
+    - Replaces all rows on each run (full refresh).
+    - Handles PermissionError (file open in Excel) via temp-file copy.
+    """
+    temp_file = None
+    try:
+        # Handle locked file (Excel open)
+        try:
+            wb = openpyxl.load_workbook(TRACKER_FILE)
+        except PermissionError:
+            print("Tracker locked - reading from temp copy...")
+            temp_fd, temp_file = tempfile.mkstemp(suffix='.xlsx')
+            os.close(temp_fd)
+            shutil.copy2(TRACKER_FILE, temp_file)
+            wb = openpyxl.load_workbook(temp_file)
+
+        # Get or create sheet
+        if SHEET_NAME in wb.sheetnames:
+            ws = wb[SHEET_NAME]
+            ws.delete_rows(1, ws.max_row)  # clear all rows
+        else:
+            ws = wb.create_sheet(title=SHEET_NAME)
+
+        # Header row
+        ws.append(EXCEL_HEADERS)
+        for cell in ws[1]:
+            cell.font = openpyxl.styles.Font(bold=True)
+
+        # Data rows
+        for job in jobs:
+            new_flag = 'NEW' if job.get('is_new') else ''
+            ws.append([
+                _safe_str(job['company']),
+                _safe_str(job['title']),
+                job['url'],
+                _safe_str(job['source']),
+                _safe_str(job['location']),
+                _safe_str(job['tags']),
+                _safe_str(job['posted_date']),
+                new_flag,
+            ])
+            # Make URL column clickable
+            url_cell = ws.cell(row=ws.max_row, column=3)
+            url_cell.hyperlink = job['url']
+            url_cell.style = 'Hyperlink'
+
+        # Auto-width for readability
+        for col in ws.columns:
+            max_len = max((len(str(cell.value or '')) for cell in col), default=0)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 60)
+
+        # Save back to original file (using temp if needed)
+        try:
+            wb.save(TRACKER_FILE)
+            print(f"Excel dump: {len(jobs)} jobs -> '{SHEET_NAME}' sheet")
+        except PermissionError:
+            # Save to temp, then replace original
+            temp_fd2, temp_out = tempfile.mkstemp(suffix='.xlsx')
+            os.close(temp_fd2)
+            wb.save(temp_out)
+            shutil.copy2(temp_out, TRACKER_FILE)
+            os.remove(temp_out)
+            print(f"Excel dump (via temp): {len(jobs)} jobs -> '{SHEET_NAME}' sheet")
+
+    except Exception as e:
+        print(f"Warning: Excel dump failed - {e}")
+    finally:
+        if temp_file and os.path.exists(temp_file):
+            os.remove(temp_file)
 
 
 # ============= HTML EMAIL =============
@@ -859,6 +960,9 @@ def main():
 
     # Save current jobs for next run comparison
     save_current_jobs(sorted_jobs)
+
+    # Dump to Excel tracker ('remote' sheet)
+    dump_to_excel(sorted_jobs)
 
     # Build HTML and send
     html = build_html(sorted_jobs, new_count=new_count, total_unchanged=total_unchanged)

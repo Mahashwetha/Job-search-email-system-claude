@@ -340,11 +340,13 @@ Excel Tracker (List.xlsx)
     │               └── Gemini 2.5 Flash API (free tier)
     │
     └── remote_search/
-            └── remote_job_search.py ──→ HTML email (every 2 days at 12:00 PM)
-                    │
-                    ├── RemoteOK + Remotive + Arbeitnow + WWR + Jobicy APIs
-                    ├── LinkedIn France (remote f_WT=2 filter)
-                    └── LinkedIn Global (India/Boston/NY + EMEA description verification)
+            ├── remote_job_search.py ──→ HTML email + Excel 'remote' sheet (every 2 days)
+            │       │
+            │       ├── RemoteOK + Remotive + Arbeitnow + WWR + Jobicy APIs
+            │       ├── LinkedIn France (remote f_WT=2 filter)
+            │       ├── LinkedIn Global (EMEA description verification)
+            │       └── rejected_remote.json (filtered out before email/Excel)
+            └── reject_remote.py ──→ CLI to manage rejected_remote.json
 ```
 
 ## File Structure
@@ -356,7 +358,10 @@ claude-job-agent/
 ├── outreach_drafter.py                # LinkedIn outreach draft generator
 ├── resume_tailor.py                   # Per-company resume tailoring via Gemini AI
 ├── remote_search/
-│   ├── remote_job_search.py           # Remote job API scanner (EMEA filter)
+│   ├── remote_job_search.py           # Remote job API scanner (EMEA filter + Excel dump)
+│   ├── reject_remote.py               # CLI to manage rejected jobs list
+│   ├── rejected_remote.json           # Reviewed & rejected (company, title) pairs
+│   ├── previous_jobs.json             # Last run's job keys for new-job detection (auto-generated)
 │   └── run_remote_job_search.bat      # Scheduler wrapper for remote search
 ├── config.template.py                 # Configuration template (copy to config.py)
 ├── config.py                          # Your private configuration (gitignored)
@@ -388,15 +393,29 @@ claude-job-agent/
 2. **EMEA Verification** - For LinkedIn Global jobs, fetches each job's full description and checks for explicit EMEA timezone signals (`emea`, `cet`, `work from anywhere`, `any timezone`, etc.). Rejects US-only or no-timezone-info jobs.
 3. **Filter** - Matches role keywords + location-compatible positions (configurable in `config.py`)
 4. **Dedup** - Removes duplicates by company+title across sources
-5. **Send Email** - Styled HTML table sorted by location tier (Paris → France → EMEA → UK → Global), new jobs highlighted in green
+5. **Excel Dump** - Writes all found jobs to the `remote` sheet in `List.xlsx` (full refresh)
+6. **Send Email** - Styled HTML table sorted by location tier (Paris → France → EMEA → UK → Global), new jobs highlighted in green
 
-**Remove an irrelevant remote job** so it never appears again — tell Claude the company and role title, and it adds an entry to `REMOTE_BLOCKLIST` in `remote_job_search.py`:
-```python
-REMOTE_BLOCKLIST = [
-    ("hopper", "sr. software engineer"),   # exact company + title (lowercased)
-    ("somecompany", ""),                   # "" blocks ALL roles from this company
-]
+**Reject remote jobs** you've reviewed using `reject_remote.py` — entries are stored in `rejected_remote.json` and filtered out on every future run:
+```bash
+# Reject a single job
+python remote_search/reject_remote.py "company name" "job title"
+
+# Bulk-reject everything from the last run (after reviewing the email)
+python remote_search/reject_remote.py --all
+
+# Restore a job for review
+python remote_search/reject_remote.py --remove "company name" "job title"
+
+# List all rejections
+python remote_search/reject_remote.py --list
+
+# Show all commands
+python remote_search/reject_remote.py --help
 ```
+Leave title as `""` to reject all roles from a company. Entries are matched as lowercase substrings.
+
+**Excel dump** — each run writes all found remote jobs to a `remote` sheet in your `List.xlsx` tracker (columns: Company, Role, URL, Source, Location, Tags, Posted, New?). Full refresh every run.
 
 ## Customization
 
@@ -554,7 +573,7 @@ For issues or questions:
 
 ---
 
-**Built with Claude Code** | **Last Updated:** 2026-02-18
+**Built with Claude Code** | **Last Updated:** 2026-02-25
 
 ---
 

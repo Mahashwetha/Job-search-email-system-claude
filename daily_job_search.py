@@ -550,7 +550,8 @@ def fetch_hot_jobs(tracker):
             else:
                 kept.append(job)
 
-        slots_needed = 5 - len(kept)
+        max_slots = 8 if category == 'Tech Lead / Lead Developer' else 5
+        slots_needed = max_slots - len(kept)
 
         # Only fetch from LinkedIn if we have empty slots
         if slots_needed > 0:
@@ -606,7 +607,7 @@ def fetch_hot_jobs(tracker):
                     global_urls.add(job['url'])
                     global_keys.add((job['company'].lower().strip(), job['title'].lower().strip()))
         else:
-            print(f"  [{category}] All 5 slots filled - no fetch needed")
+            print(f"  [{category}] All {max_slots} slots filled - no fetch needed")
 
         hot_jobs_by_category[category] = kept
 
