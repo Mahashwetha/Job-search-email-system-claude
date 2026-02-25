@@ -27,7 +27,7 @@ from html import unescape
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 try:
-    from config import EMAIL_CONFIG, TRACKER_FILE
+    from config import EMAIL_CONFIG
 except ImportError:
     print("ERROR: config.py not found!")
     print("Please copy config.template.py to config.py and fill in your details.")
@@ -715,7 +715,7 @@ def mark_new_jobs(jobs, previous_keys):
 # ============= EXCEL DUMP =============
 
 EXCEL_HEADERS = ['Company', 'Role', 'URL', 'Source', 'Location', 'Tags', 'Posted', 'New?']
-SHEET_NAME = 'remote'
+REMOTE_EXCEL_FILE = os.path.join(os.path.dirname(__file__), 'remote.xlsx')
 
 
 def _safe_str(val):
@@ -723,39 +723,24 @@ def _safe_str(val):
     if not isinstance(val, str):
         return val
     return (val
-            .replace('\u2192', '->')   # →
-            .replace('\u2190', '<-')   # ←
-            .replace('\u2022', '*')    # •
-            .replace('\u2013', '-')    # –
-            .replace('\u2014', '-')    # —
+            .replace('\u2192', '->')
+            .replace('\u2190', '<-')
+            .replace('\u2022', '*')
+            .replace('\u2013', '-')
+            .replace('\u2014', '-')
             .encode('cp1252', errors='replace').decode('cp1252'))
 
 
 def dump_to_excel(jobs):
-    """Write sorted remote jobs to the 'remote' sheet in the tracker Excel file.
+    """Write sorted remote jobs to remote.xlsx (standalone — never touches List.xlsx).
 
-    - Creates the sheet if it doesn't exist.
-    - Replaces all rows on each run (full refresh).
-    - Handles PermissionError (file open in Excel) via temp-file copy.
+    Full refresh every run. Handles PermissionError (file open in Excel) via temp file.
     """
-    temp_file = None
+    temp_out = None
     try:
-        # Handle locked file (Excel open)
-        try:
-            wb = openpyxl.load_workbook(TRACKER_FILE)
-        except PermissionError:
-            print("Tracker locked - reading from temp copy...")
-            temp_fd, temp_file = tempfile.mkstemp(suffix='.xlsx')
-            os.close(temp_fd)
-            shutil.copy2(TRACKER_FILE, temp_file)
-            wb = openpyxl.load_workbook(temp_file)
-
-        # Get or create sheet
-        if SHEET_NAME in wb.sheetnames:
-            ws = wb[SHEET_NAME]
-            ws.delete_rows(1, ws.max_row)  # clear all rows
-        else:
-            ws = wb.create_sheet(title=SHEET_NAME)
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'remote'
 
         # Header row
         ws.append(EXCEL_HEADERS)
@@ -775,34 +760,31 @@ def dump_to_excel(jobs):
                 _safe_str(job['posted_date']),
                 new_flag,
             ])
-            # Make URL column clickable
             url_cell = ws.cell(row=ws.max_row, column=3)
             url_cell.hyperlink = job['url']
             url_cell.style = 'Hyperlink'
 
-        # Auto-width for readability
+        # Auto-width
         for col in ws.columns:
             max_len = max((len(str(cell.value or '')) for cell in col), default=0)
             ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 60)
 
-        # Save back to original file (using temp if needed)
+        # Save — use temp file if remote.xlsx is open in Excel
         try:
-            wb.save(TRACKER_FILE)
-            print(f"Excel dump: {len(jobs)} jobs -> '{SHEET_NAME}' sheet")
+            wb.save(REMOTE_EXCEL_FILE)
+            print(f"Excel dump: {len(jobs)} jobs -> remote.xlsx")
         except PermissionError:
-            # Save to temp, then replace original
-            temp_fd2, temp_out = tempfile.mkstemp(suffix='.xlsx')
-            os.close(temp_fd2)
+            temp_fd, temp_out = tempfile.mkstemp(suffix='.xlsx')
+            os.close(temp_fd)
             wb.save(temp_out)
-            shutil.copy2(temp_out, TRACKER_FILE)
-            os.remove(temp_out)
-            print(f"Excel dump (via temp): {len(jobs)} jobs -> '{SHEET_NAME}' sheet")
+            shutil.copy2(temp_out, REMOTE_EXCEL_FILE)
+            print(f"Excel dump (via temp): {len(jobs)} jobs -> remote.xlsx")
 
     except Exception as e:
         print(f"Warning: Excel dump failed - {e}")
     finally:
-        if temp_file and os.path.exists(temp_file):
-            os.remove(temp_file)
+        if temp_out and os.path.exists(temp_out):
+            os.remove(temp_out)
 
 
 # ============= HTML EMAIL =============
