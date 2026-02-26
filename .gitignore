@@ -44,4 +44,5 @@ ENV/
 .DS_Store
 Thumbs.db
 remote_search/previous_jobs.json
+remote_search/rejected_remote.json
 daily_hot_jobs.json
