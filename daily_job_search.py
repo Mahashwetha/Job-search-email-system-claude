@@ -369,6 +369,21 @@ DEFAULT_HOT_JOB_QUERIES = {
         ('lead+software+engineer+java', 'Europe'),
         ('lead+developer+java', 'Europe'),
     ],
+    'AI / GenAI Engineer': [
+        ('genai+engineer', 'Paris, France'),
+        ('llm+engineer', 'Paris, France'),
+        ('ai+engineer+backend', 'Paris, France'),
+        ('generative+ai+engineer', 'Paris, France'),
+        ('genai+engineer', 'France'),
+        ('llm+engineer', 'France'),
+        ('ai+engineer+backend', 'France'),
+        ('genai+engineer', 'Europe'),
+        ('llm+engineer', 'Europe'),
+        ('ai+engineer+backend', 'Europe'),
+        ('openai', 'Europe'),
+        ('anthropic', 'Europe'),
+        ('mistral', 'Europe'),
+    ],
 }
 
 # Per-category title filters.
@@ -385,6 +400,8 @@ HOT_JOB_TITLE_FILTERS = {
                                   'web', 'cloud', 'devops', 'cyber'],
     'Tech Lead / Lead Developer': ['tech lead', 'lead developer', 'lead engineer', 'lead software',
                                    'lead backend', 'technical lead', 'développeur lead'],
+    'AI / GenAI Engineer': ['ai', 'genai', 'gen ai', 'llm', 'generative', 'machine learning',
+                            'artificial intelligence', 'openai', 'anthropic', 'mistral'],
 }
 
 # These categories require the job *description* to contain at least one of these keywords.
@@ -393,6 +410,7 @@ HOT_JOB_DESC_REQUIRED = {
     'Product Owner': _JAVA_OOP_ENGLISH,
     'Assistant Project Manager': _JAVA_OOP_ENGLISH,
     'Tech Lead / Lead Developer': _JAVA_OOP_ENGLISH,
+    'AI / GenAI Engineer': ['genai', 'gen ai', 'llm', 'generative ai', 'large language', 'openai', 'anthropic', 'mistral', 'ai engineer'],
 }
 
 
@@ -550,7 +568,7 @@ def fetch_hot_jobs(tracker):
             else:
                 kept.append(job)
 
-        max_slots = 8 if category == 'Tech Lead / Lead Developer' else 5
+        max_slots = 8 if category in ('Tech Lead / Lead Developer', 'AI / GenAI Engineer') else 5
         slots_needed = max_slots - len(kept)
 
         # Only fetch from LinkedIn if we have empty slots
