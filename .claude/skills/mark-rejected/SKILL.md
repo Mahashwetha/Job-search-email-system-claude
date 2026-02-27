@@ -5,32 +5,20 @@ description: This skill should be used when the user wants to mark a company as 
 
 # Mark Company as Rejected
 
-Updates `List.xlsx` for a company: sets column D to `"Rejected"` and applies strikethrough font across columns A–F.
+Update `List.xlsx` for a company that rejected you: set column D to `Rejected` and apply strikethrough formatting across columns A–F.
 
-## Run the script
+## Steps
 
-```bash
-cd C:/Users/mahas/Learnings/claude-job-agent
-python .claude/skills/mark-rejected/scripts/mark_rejected.py "Company Name"
-```
+Run the bundled script at `.claude/skills/mark-rejected/scripts/mark_rejected.py` with the company name as the argument, from the project root.
 
-Matching is **case-insensitive substring** — `"stripe"` matches `"Stripe"`, `"Stripe EMEA"`, etc.
-
-## What the script does
-1. Finds all rows where column A contains the company name (substring match)
-2. Sets column D to `"Rejected"`
-3. Applies strikethrough font to columns A–F, preserving existing font properties (bold, size, color)
-4. Handles `PermissionError` via temp copy if List.xlsx is open in Excel
-5. Saves and reports rows updated
+The script finds all rows where column A contains the company name (case-insensitive substring match), sets column D to `Rejected`, applies strikethrough to columns A–F while preserving existing font properties, and saves the file. It handles `PermissionError` automatically via a temp copy if the file is open in Excel.
 
 ## After running
-- Verify the output shows the correct row number and company name
-- If multiple rows matched unexpectedly, the company name substring was too broad — manually revert unwanted rows in Excel
-- The daily email will automatically reflect the ❌ Rejected status on next run
 
-## Manual alternative (if script fails)
-1. Open `List.xlsx`
-2. Find the company row
-3. Type `Rejected` in column D
-4. Select cells A–F in that row → `Ctrl+1` → Font tab → check Strikethrough
-5. Save
+Check the output — it reports the row number and company name for each row updated. If multiple unexpected rows matched, the company name was too broad. Revert any wrong rows manually in Excel (remove strikethrough, restore the original status).
+
+The daily email will automatically show ❌ Rejected for that company on the next run.
+
+## If the script fails
+
+Open `List.xlsx` manually, find the company row, type `Rejected` in column D, select cells A–F, open Format Cells (`Ctrl+1`), go to the Font tab, and check Strikethrough.

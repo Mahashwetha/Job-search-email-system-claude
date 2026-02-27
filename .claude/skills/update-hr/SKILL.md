@@ -5,52 +5,31 @@ description: This skill should be used when the user wants to find, add, or upda
 
 # Update HR Contacts
 
-Find LinkedIn recruiter profiles for a company and add them to `List.xlsx` column E via `update_hr_contacts.py`.
+Find LinkedIn recruiter profiles for a company and add them to column E of `List.xlsx`.
 
-## Workflow
+## Step 1 — Search LinkedIn
 
-### Step 1 — Search for contacts
-Use WebSearch with this query template:
+Use WebSearch with this query:
 ```
 "{company}" recruiter OR "talent acquisition" OR "hiring manager" OR "HR manager" OR "people partner" Paris OR France OR EMEA site:linkedin.com/in
 ```
 
-**Location priority**: Paris first → France → EMEA as fallback. Only use EMEA-level contacts when no Paris/France-specific recruiter is found. Reject India/US/APAC contacts unless the company has no EU presence.
+Location priority: Paris first, then France, then EMEA as a fallback. Only use EMEA-level contacts when no Paris or France-specific person is found. Ignore contacts based in India, US, or APAC unless the company has no EU presence at all.
 
-### Step 2 — Add to HR_CONTACTS dict
-Open `update_hr_contacts.py` and add the company entry to the `HR_CONTACTS` dict:
+## Step 2 — Add to the HR_CONTACTS dict
 
-```python
-"CompanyName": [
-    ("Full Name", "https://www.linkedin.com/in/profile-slug/"),
-    ("Second Name", "https://www.linkedin.com/in/profile-slug/"),
-],
-```
+Open `update_hr_contacts.py` and add or extend the company entry in the `HR_CONTACTS` dictionary. Use the company name exactly as it appears in column A of `List.xlsx`. If the company is already in the dict, append the new contacts to its list — don't replace existing ones.
 
-- Use the company name exactly as it appears in `List.xlsx` column A
-- If the company already exists in the dict, append new contacts to its list
-- Names with no LinkedIn URL: use `None` as the second element
+## Step 3 — Run the script
 
-### Step 3 — Run the script
-```bash
-cd C:/Users/mahas/Learnings/claude-job-agent
-python update_hr_contacts.py
-```
+Run `update_hr_contacts.py` from the project root. The script reads existing cell content first and only appends contacts whose names aren't already there. Running it twice produces zero changes the second time.
 
-**What happens:**
-- Script reads existing cell content in column E
-- Appends only contacts whose names aren't already in the cell (idempotent)
-- Sets row height + wrap text for multi-contact cells
-- Creates a backup of `List.xlsx` before writing
+## Step 4 — Verify
 
-### Step 4 — Verify
-Script output shows: `Updated X rows, 0 errors`. Running twice produces 0 updates on second run.
-
----
+The script reports how many rows were updated. Check that the count matches expectations.
 
 ## Rules
-- **Append-only**: script never overwrites manually entered contacts
-- **No [UNVERIFIED] prefix** — write names directly as found
-- Write `HYPERLINK` formula format is handled automatically by the script
-- Do NOT drag fill handle in Excel after — causes ghost rows with duplicated formulas
-- To remove a contact: delete from Excel AND remove from `HR_CONTACTS` dict
+- Never overwrite manually entered contacts — the script is append-only.
+- Write names directly, no [UNVERIFIED] prefix.
+- To remove a contact: delete it from Excel AND remove it from the `HR_CONTACTS` dict. That's the only case requiring both steps.
+- Don't drag the fill handle in Excel after running — it creates ghost rows with duplicated formulas.

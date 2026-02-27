@@ -5,58 +5,23 @@ description: This skill should be used when the user wants to manually trigger, 
 
 # Test Run — Manual Script Execution
 
-Manually trigger the daily or remote job search scripts outside their scheduled runs.
+Manually trigger the daily or remote job search scripts outside their scheduled runs. Run all commands from the project root: `C:/Users/mahas/Learnings/claude-job-agent`.
 
-## Script locations (run from project root)
-```
-cd C:/Users/mahas/Learnings/claude-job-agent
-```
+## Daily job search
 
----
+Run `daily_job_search.py`. This reads `List.xlsx`, fetches hot jobs from LinkedIn, and sends the styled HTML digest email.
 
-## Daily Job Search
+To force a full hot jobs refresh (re-fetch everything), delete `daily_hot_jobs.json` before running.
 
-Fetches jobs from LinkedIn/Indeed for Paris roles, reads Excel tracker, sends styled HTML email.
+## Remote job search
 
-```bash
-python daily_job_search.py
-```
+Run `remote_search/remote_job_search.py`.
 
-**What happens:**
-- Reads `List.xlsx` for tracked companies and their statuses
-- Searches hot job categories (Senior Java, Backend Java, PO, Asst PM, Tech Lead, AI/GenAI)
-- Sends HTML digest email to configured address
-- Updates `daily_hot_jobs.json` (sticky job state)
+**Always add `--no-save` for test runs.** Without it, `previous_jobs.json` gets overwritten and the NEW flag detection breaks for the real scheduled run. The Excel file still gets updated either way.
 
-**To force full refresh** (re-fetch all hot jobs): delete `daily_hot_jobs.json` first.
-
----
-
-## Remote Job Search
-
-Fetches remote/EMEA roles from RemoteOK, Remotive, Arbeitnow, WWR, Jobicy, LinkedIn.
-
-```bash
-python remote_search/remote_job_search.py --no-save
-```
-
-**Always use `--no-save` for test runs.** This prevents overwriting `previous_jobs.json`, so the NEW flag detection stays accurate for the real scheduled run.
-
-**What happens:**
-- Fetches from all remote sources
-- Filters against `rejected_remote.json` blocklist
-- Appends new entries to `remote_search/remote.xlsx`
-- Sends HTML digest email
-- With `--no-save`: skips updating `previous_jobs.json`
-
-**To run for real** (update state, mark jobs as seen):
-```bash
-python remote_search/remote_job_search.py
-```
-
----
+Only omit `--no-save` when running for real (i.e. as a substitute for the scheduled run).
 
 ## Common issues
-- `config.py not found` — copy `config.template.py` to `config.py` and fill in credentials
-- `PermissionError` on Excel — close `List.xlsx` in Excel first (or script uses temp copy fallback)
-- Email not received — check spam, verify `EMAIL_CONFIG` in `config.py`
+- `config.py not found` — copy `config.template.py` to `config.py` and fill in credentials.
+- `PermissionError` on Excel — the script handles this with a temp copy fallback, but closing `List.xlsx` first is cleaner.
+- Email not received — check spam, verify `EMAIL_CONFIG` in `config.py`.

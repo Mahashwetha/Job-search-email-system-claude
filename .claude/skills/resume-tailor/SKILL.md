@@ -5,49 +5,28 @@ description: This skill should be used when the user wants to tailor or customiz
 
 # Resume Tailor
 
-Generate a per-company tailored resume DOCX using Gemini 2.5 Flash via `resume_tailor.py`.
+Generate a per-company tailored resume using Gemini 2.5 Flash via `resume_tailor.py`.
 
-## Usage
+## How to run
 
-### Single job (most common)
-```bash
-cd C:/Users/mahas/Learnings/claude-job-agent
-python resume_tailor.py "https://job-posting-url" "Company Name"
-```
+For a single job, run `resume_tailor.py` with the job posting URL and company name as arguments.
 
-### Batch (all 'done' status companies in tracker with non-LinkedIn links)
-```bash
-python resume_tailor.py
-```
+For batch mode (all companies with status `done` and non-LinkedIn links in the tracker), run it with no arguments.
 
 ## Output
-Saved to:
-```
-C:\Users\mahas\OneDrive\Desktop\Applications\JobSearch\resume_adjusted\resume_{CompanyName}.docx
-```
 
-**Idempotent**: skips if the output file already exists. To regenerate, delete the existing file first.
+Saved to the `resume_adjusted/` folder configured in `config.py`, named `resume_{CompanyName}.docx`. The script skips a company if the file already exists — delete the file to regenerate it.
 
 ## What it does
-- Fetches the job description from the URL
-- Reads base resume from `resume\mahashwetharao_2025resume_Dec_English.docx`
-- Asks Gemini to suggest minimal tweaks: skill reordering, keyword surfacing
-- **Never fabricates experience** — only reorders and surfaces existing skills
-- Strips any `**markdown**` formatting Gemini adds before writing to DOCX
 
-## Known site compatibility
-| Site type | Status |
-|-----------|--------|
-| Workday | Works (JSON-LD extraction) |
-| Standard HTML job pages | Works |
-| Ashby | May need manual copy-paste of JD |
-| BPCE/internal portals | May need Selenium or skip |
-| LinkedIn job pages | Skipped (batch mode filters these out) |
+Fetches the job description from the URL, reads the base resume, and asks Gemini to suggest minimal tweaks — reordering skills, surfacing existing keywords. It never fabricates experience. Gemini's markdown formatting (`**bold**`) is stripped automatically before writing to the DOCX.
 
-## If the URL is JS-rendered and fails
-Pass the job description text directly — copy the JD from the browser and paste it into a temp `.txt` file, then modify the call or paste directly when prompted. Alternatively, skip and tailor manually.
+## Site compatibility
 
-## Rate limits
-- Gemini free tier: 5s delay between calls in batch mode
-- On 429 error: script retries automatically
-- Model used: `gemini-2.5-flash` (not `gemini-2.0-flash` — that quota exhausts faster)
+Most standard job pages work. Workday works via JSON-LD extraction. Ashby and internal portals (like BPCE) may fail — in that case, skip the URL and tailor manually, or paste the job description text into a temp file and adjust the call.
+
+LinkedIn URLs are skipped automatically in batch mode.
+
+## If you hit rate limits
+
+The free Gemini tier occasionally returns 429 errors — the script retries automatically. If it keeps failing, wait a minute and re-run. Use `gemini-2.5-flash`, not `gemini-2.0-flash` (that quota runs out faster).

@@ -5,33 +5,30 @@ description: This skill should be used when the user wants to reject, hide, or f
 
 # Reject Remote Job
 
-Manage the rejected remote jobs blocklist via `remote_search/reject_remote.py`. Jobs on this list are filtered out of all future remote job emails.
+Manage the remote jobs blocklist. Jobs on this list are filtered out of all future remote job emails.
 
-## Script location
-`remote_search/reject_remote.py` — run from the project root:
-```
-cd C:/Users/mahas/Learnings/claude-job-agent
-python remote_search/reject_remote.py <args>
-```
+The blocklist lives in `remote_search/rejected_remote.json` and is managed via `remote_search/reject_remote.py` (run from the project root).
 
-## Commands
+## What to do based on what the user says
 
-| Intent | Command |
-|--------|---------|
-| Reject a specific job | `python remote_search/reject_remote.py "company" "title"` |
-| Reject all roles from a company | `python remote_search/reject_remote.py "company" ""` |
-| Reject everything from last run | `python remote_search/reject_remote.py --all` |
-| Restore a rejected job | `python remote_search/reject_remote.py --remove "company" "title"` |
-| Show all rejections | `python remote_search/reject_remote.py --list` |
+**Reject a specific job** — run the script with company name and job title as arguments.
 
-## Matching rules (important)
-- Matching is **case-insensitive substring** — "grafana" matches "Grafana Labs"
-- Special characters (é, ®, ™) in company names must match exactly — verify character-by-character
-- Leaving title as `""` rejects **all** roles from that company permanently
-- To undo, use `--remove` with the exact same company/title strings used when adding
+**Reject all roles from a company** — run the script with the company name and an empty string as the title.
 
-## Workflow
-1. User mentions a job to reject (company + title, or just company)
-2. Confirm the exact company name spelling (check for accents, special chars)
-3. Run the reject command
-4. Confirm output shows "Added: ..." with the new total count
+**Reject everything from the last email** — run the script with `--all`. This bulk-rejects all jobs from `previous_jobs.json` (the last run).
+
+**Restore a rejected job** — run the script with `--remove` followed by the company and title.
+
+**Show all rejections** — run the script with `--list`.
+
+## Matching rules — important
+- Matching is case-insensitive substring. "grafana" matches "Grafana Labs".
+- Special characters (é, ®, ™) must match exactly — double-check character by character if a company name has accents or symbols.
+- An empty title rejects all roles from that company permanently.
+- To undo, use `--remove` with the exact same strings used when adding.
+
+## Steps
+1. Identify what the user wants to reject (company, title, or both).
+2. Double-check the company name spelling, especially for special characters.
+3. Run the appropriate script command.
+4. Confirm the output shows the entry was added and the new total count.
