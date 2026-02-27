@@ -50,7 +50,8 @@ ROLE_KEYWORDS = REMOTE_ROLE_KEYWORDS or [
     'software engineer', 'senior software', 'tech lead',
     'api engineer',
     # AI roles (not ML/data science prerequisite)
-    'ai engineer', 'genai', 'llm engineer',
+    'ai engineer', 'genai', 'llm engineer', 'llm',
+    'generative ai', 'ai platform engineer', 'foundation model',
 ]
 
 # Python is secondary — only include Python roles if they ALSO mention Java/backend
@@ -346,6 +347,9 @@ def fetch_linkedin_france():
         'java+backend',
         'backend+engineer',
         'senior+software+engineer+java',
+        'genai+engineer',
+        'llm+engineer',
+        'ai+engineer+backend',
     ]
     seen_urls = set()
     for query in queries:
@@ -449,6 +453,10 @@ def fetch_linkedin_global():
         ('backend+engineer+global+remote', 'India'),
         ('backend+engineer+global+remote', 'New York, NY'),
         ('backend+engineer+global+remote', 'Boston, MA'),
+        ('genai+engineer+EMEA', 'India'),
+        ('llm+engineer+EMEA', 'India'),
+        ('ai+engineer+EMEA+remote', 'New York, NY'),
+        ('genai+engineer+global+remote', 'New York, NY'),
     ]
     seen_urls = set()
     for query, location in searches:
