@@ -37,8 +37,9 @@ ENV/
 *.swp
 *.swo
 
-# Claude Code
-.claude/
+# Claude Code (exclude settings/memory, but track skills)
+.claude/*
+!.claude/skills/
 
 # OS files
 .DS_Store

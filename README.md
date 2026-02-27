@@ -326,6 +326,21 @@ python resume_tailor.py "https://company.workdayjobs.com/job/..." "Company Name"
 
 **Auto-outreach:** When running in single mode, outreach drafts are automatically generated after a successful resume tailor (no need to run `outreach_drafter.py` separately).
 
+## Claude Code Skills
+
+This project includes 4 built-in skills for [Claude Code](https://claude.ai/code). Skills load automatically — just describe what you want in plain language and Claude picks the right one.
+
+| Skill | Auto-triggers when you say... |
+|-------|-------------------------------|
+| **reject-job** | "reject [company]", "hide this job", "don't show [company] again", "add to blocklist" |
+| **test-run** | "run daily jobs", "test the remote search", "trigger the job email", "send the digest now" |
+| **update-hr** | "find HR for [company]", "add recruiter for [company]", "search LinkedIn for [company]" |
+| **resume-tailor** | "tailor resume for [company]", "generate resume for [job]", "adapt my resume to this role" |
+
+No slash commands needed. Each skill encodes the project-specific workflow, gotchas, and script paths — so Claude follows the right steps automatically without needing reminders each session.
+
+Skills live in `.claude/skills/` and are version-controlled with the project.
+
 ## Architecture
 
 ```
@@ -375,7 +390,13 @@ claude-job-agent/
 ├── tracker_template.xlsx              # Excel tracker template
 ├── job_search_log.txt                 # Execution log (auto-generated)
 ├── .gitignore                         # Excludes private files from Git
-└── README.md                          # This file
+├── README.md                          # This file
+└── .claude/
+    └── skills/
+        ├── reject-job/SKILL.md        # Auto-triggered: reject/hide remote jobs
+        ├── test-run/SKILL.md          # Auto-triggered: manually run daily or remote search
+        ├── update-hr/SKILL.md         # Auto-triggered: find and add HR contacts
+        └── resume-tailor/SKILL.md     # Auto-triggered: tailor resume for a company
 ```
 
 ## How It Works
@@ -579,7 +600,7 @@ For issues or questions:
 
 ---
 
-**Built with Claude Code** | **Last Updated:** 2026-02-25
+**Built with Claude Code** | **Last Updated:** 2026-02-27
 
 ---
 
