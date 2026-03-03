@@ -495,7 +495,7 @@ def load_hot_jobs_current():
 
 def load_hot_jobs_blocklist():
     """Load the blocklist of manually removed companies."""
-    return set(_load_hot_jobs_file().get('blocklist', []))
+    return set(x[0] + '||' + x[1] if isinstance(x, list) else x for x in _load_hot_jobs_file().get('blocklist', []))
 
 
 def save_hot_jobs_current(current_jobs, blocklist=None):
