@@ -249,6 +249,11 @@ python daily_job_search.py --hot-jobs --remove "Company" "Role title"
 ```
 Only that specific company+role pair is blocklisted. Other roles from the same company can still appear.
 
+**Remove via Claude Code** (recommended) — just say it in plain language:
+> "remove all senior java hot jobs, I applied to Theodo"
+
+The `remove-hot-job` skill handles clearing slots and blocklisting dismissed jobs automatically.
+
 **Refresh all categories** (clear and re-fetch):
 ```bash
 python daily_job_search.py --hot-jobs --refresh
@@ -328,11 +333,12 @@ python resume_tailor.py "https://company.workdayjobs.com/job/..." "Company Name"
 
 ## Claude Code Skills
 
-This project includes 4 built-in skills for [Claude Code](https://claude.ai/code). Skills load automatically — just describe what you want in plain language and Claude picks the right one.
+This project includes 5 built-in skills for [Claude Code](https://claude.ai/code). Skills load automatically — just describe what you want in plain language and Claude picks the right one.
 
 | Skill | Auto-triggers when you say... |
 |-------|-------------------------------|
 | **reject-job** | "reject [company]", "hide this job", "don't show [company] again", "add to blocklist" |
+| **remove-hot-job** | "remove [company] from hot jobs", "clear senior java hot jobs", "I applied to [company] from hot jobs" |
 | **test-run** | "run daily jobs", "test the remote search", "trigger the job email", "send the digest now" |
 | **update-hr** | "find HR for [company]", "add recruiter for [company]", "search LinkedIn for [company]" |
 | **resume-tailor** | "tailor resume for [company]", "generate resume for [job]", "adapt my resume to this role" |
