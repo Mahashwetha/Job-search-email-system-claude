@@ -558,11 +558,16 @@ def fetch_hot_jobs(tracker):
         # Start with existing sticky list for this category
         existing = current.get(category, [])
 
-        # Remove jobs whose company is now in the tracker
+        # Remove jobs whose company is now in the tracker, or match global exclusions
         kept = []
         for job in existing:
+            title_lower = job['title'].lower()
             if _is_in_tracker(job['company'].lower().strip(), tracker_names):
                 print(f"  [{category}] Removed '{job['company']}' (now in tracker)")
+                global_urls.discard(job['url'])
+                global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
+            elif any(kw in title_lower for kw in ('stage', 'alternance', 'alternant')):
+                print(f"  [{category}] Removed '{job['company']}' (excluded title keyword)")
                 global_urls.discard(job['url'])
                 global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
             else:
