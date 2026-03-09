@@ -591,9 +591,12 @@ def fetch_hot_jobs(tracker):
                         continue
                     if _is_blocklisted(job['company'].lower().strip(), job['title'].lower().strip(), blocklist):
                         continue
+                    # Global title exclusions (all categories)
+                    title_lower = job['title'].lower()
+                    if any(kw in title_lower for kw in ('stage', 'alternance', 'alternant')):
+                        continue
                     # Apply per-category title filter
                     if title_filter:
-                        title_lower = job['title'].lower()
                         if not any(kw in title_lower for kw in title_filter):
                             continue
                     existing_urls.add(job['url'])
