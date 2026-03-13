@@ -1,6 +1,6 @@
 ---
 name: mark-rejected
-description: This skill should be used when the user wants to mark a company as rejected in their Excel job tracker (List.xlsx). Triggers on phrases like "mark [company] as rejected", "reject [company] in the tracker", "[company] rejected me", "strikethrough [company]", "update [company] to rejected", "I got rejected by [company]", "remove [company] from active".
+description: This skill should be used when the user wants to mark a company as rejected in their Excel job tracker (List.xlsx). Triggers on phrases like "mark [company] as rejected", "reject [company] in the tracker", "[company] rejected me", "strikethrough [company]", "update [company] to rejected", "I got rejected by [company]", "remove [company] from active", "rejected [company]", rejected [company] [role]".
 ---
 
 # Mark Company as Rejected
