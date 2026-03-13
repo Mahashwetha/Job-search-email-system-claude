@@ -59,7 +59,7 @@ PYTHON_SECONDARY_KEYWORDS = ['python']
 JAVA_BACKEND_SIGNALS = ['java', 'backend', 'back-end', 'back end', 'jvm', 'spring', 'microservices']
 
 # Sources that are inherently EU-focused (jobs from these pass without explicit EMEA location)
-EU_FOCUSED_SOURCES = ['Arbeitnow']
+EU_FOCUSED_SOURCES = []
 
 # Sources where "Remote" without region is common — allow if no US indicators found
 RELAXED_LOCATION_SOURCES = ['Jobicy']
@@ -860,7 +860,7 @@ def build_html(jobs, new_count=0, total_unchanged=False):
     if not jobs:
         rows_html = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#7f8c8d;">No matching remote roles found this run.</td></tr>\n'
 
-    sources = 'RemoteOK, Remotive, Arbeitnow, WWR, Jobicy, LinkedIn FR, LinkedIn Global'
+    sources = 'RemoteOK, Remotive, WWR, Jobicy, LinkedIn FR, LinkedIn Global'
     html = f"""
     <html>
     <head>
@@ -943,7 +943,8 @@ def main(no_save=False):
     all_jobs = []
     all_jobs.extend(fetch_remoteok())
     all_jobs.extend(fetch_remotive())
-    all_jobs.extend(fetch_arbeitnow())
+    # Arbeitnow removed — low quality results
+    # all_jobs.extend(fetch_arbeitnow())
     all_jobs.extend(fetch_weworkremotely())
     all_jobs.extend(fetch_jobicy())
     all_jobs.extend(fetch_linkedin_france())

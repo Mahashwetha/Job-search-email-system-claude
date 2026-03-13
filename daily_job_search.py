@@ -566,7 +566,7 @@ def fetch_hot_jobs(tracker):
                 print(f"  [{category}] Removed '{job['company']}' (now in tracker)")
                 global_urls.discard(job['url'])
                 global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
-            elif any(kw in title_lower for kw in ('stage', 'alternance', 'alternant')):
+            elif any(kw in title_lower for kw in ('stage', 'alternance', 'alternant', 'internship', 'intern')):
                 print(f"  [{category}] Removed '{job['company']}' (excluded title keyword)")
                 global_urls.discard(job['url'])
                 global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
@@ -598,7 +598,7 @@ def fetch_hot_jobs(tracker):
                         continue
                     # Global title exclusions (all categories)
                     title_lower = job['title'].lower()
-                    if any(kw in title_lower for kw in ('stage', 'alternance', 'alternant')):
+                    if any(kw in title_lower for kw in ('stage', 'alternance', 'alternant', 'internship', 'intern')):
                         continue
                     # Apply per-category title filter
                     if title_filter:
