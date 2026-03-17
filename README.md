@@ -5,7 +5,7 @@ An end-to-end automated job search pipeline that handles everything from finding
 ## Features
 
 - **Daily Email Reports** - Styled HTML emails at 11:00 AM CET with companies grouped by role and status
-- **Hot Jobs Section** - Sticky top-5-per-category LinkedIn listings (fully configurable role categories) that persist until you add a company to your tracker, then backfill just that slot
+- **Hot Jobs Section** - Sticky top-5-per-category listings from **LinkedIn + Welcome to the Jungle** (fully configurable role categories) that persist until you add a company to your tracker, then backfill just that slot — each job shows a coloured source badge (🔵 LI / 🟢 WTTJ)
 - **Remote Job Scanner** - Fetches from RemoteOK, Remotive, and Arbeitnow APIs every 2 days, filters for EMEA-compatible roles
 - **Resume Tailor** - Per-company tailored resumes using Gemini 2.5 Flash (free tier) — never fabricates, only reorders and surfaces existing skills
 - **Outreach Drafter** - Auto-generates short/medium/long LinkedIn message templates for each applied company
@@ -232,10 +232,11 @@ python outreach_drafter.py
 The daily email includes a **Hot Jobs** section that surfaces fresh LinkedIn listings you haven't seen or applied to yet. It shows 5 jobs per role category (fully configurable), sorted by location priority (City > Country > Region).
 
 **How it works:**
-- Fetches from LinkedIn's guest API (search card data: company, title, location, URL)
-- Maintains a **sticky list** — the same 5 jobs persist across runs until you act on them
+- Fetches from **LinkedIn's guest API** and **Welcome to the Jungle (Algolia backend)** — both run per query for France/Paris searches
+- Each job shows a coloured source badge in the email: `LI` (blue) for LinkedIn, `WTTJ` (green) for Welcome to the Jungle
+- Maintains a **sticky list** — the same jobs persist across runs until you act on them
 - When you add a company to your Excel tracker, that job drops out and gets backfilled with a fresh one
-- Only fetches from LinkedIn when there are empty slots to fill (fast repeat runs)
+- Only fetches when there are empty slots to fill (fast repeat runs)
 - Shown as an orange-themed section at the top of the daily email
 
 **Standalone check (no email sent):**
@@ -354,7 +355,7 @@ Excel Tracker (List.xlsx)
     │
     ├── daily_job_search.py ──→ HTML email (11:00 AM daily)
     │       │
-    │       ├── Hot Jobs ──→ LinkedIn guest API (sticky top-5 per category)
+    │       ├── Hot Jobs ──→ LinkedIn guest API + Welcome to the Jungle (Algolia)
     │       ├── outreach_drafter.py ──→ LinkedIn message drafts
     │       └── resume_tailor.py ──→ Tailored DOCX resumes
     │               │
@@ -409,7 +410,7 @@ claude-job-agent/
 
 ### Daily Pipeline (11:00 AM)
 1. **Read Excel** - Loads your application tracker for statuses, role links, and HR contacts
-2. **Fetch Hot Jobs** - Queries LinkedIn for fresh listings per role category, filters out tracker companies, keeps a sticky top-5 list per category (only backfills when a slot opens)
+2. **Fetch Hot Jobs** - Queries LinkedIn + Welcome to the Jungle for fresh listings per role category, filters out tracker companies, keeps a sticky top-5 list per category (only backfills when a slot opens) — each job tagged with a coloured source badge in the email
 3. **Organize** - Groups companies by role and status (Not Contacted / Review / Applied / Rejected)
 4. **Send Email** - Styled HTML report via Gmail SMTP with hot jobs section + clickable links and HR contacts
 5. **Outreach Drafts** - LinkedIn message templates for applied companies with HR contacts
@@ -606,7 +607,7 @@ For issues or questions:
 
 ---
 
-**Built with Claude Code** | **Last Updated:** 2026-02-27
+**Built with Claude Code** | **Last Updated:** 2026-03-17
 
 ---
 

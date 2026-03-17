@@ -464,6 +464,58 @@ def fetch_linkedin_job_description(url):
         return ''
 
 
+def fetch_wttj_jobs(query):
+    """Fetch jobs from Welcome to the Jungle via Algolia search backend (public read-only key).
+    Uses the French index (wttj_jobs_production_fr) — all results are France-based.
+    """
+    jobs = []
+    try:
+        url = 'https://CSEKHVMS53-dsn.algolia.net/1/indexes/wttj_jobs_production_fr/query'
+        headers = {
+            'X-Algolia-Application-Id': 'CSEKHVMS53',
+            'X-Algolia-API-Key': '4bd8f6215d0cc52b26430765769e65a0',
+            'Content-Type': 'application/json',
+            'Origin': 'https://www.welcometothejungle.com',
+            'Referer': 'https://www.welcometothejungle.com/',
+            'User-Agent': 'Mozilla/5.0',
+        }
+        clean_query = query.replace('+', ' ')
+        payload = {'params': f'query={clean_query}&hitsPerPage=20'}
+        resp = requests.post(url, headers=headers, json=payload, timeout=15)
+        if resp.status_code != 200:
+            return jobs
+        data = resp.json()
+        for hit in data.get('hits', []):
+            title = hit.get('name', '')
+            org = hit.get('organization', {}) or {}
+            company = org.get('name', '')
+            org_slug = org.get('slug', '')
+            slug = hit.get('slug', '')
+            # offices is a list; take first entry for location
+            offices = hit.get('offices') or []
+            if offices:
+                city = offices[0].get('city', '')
+                country = offices[0].get('country_code', 'FR')
+            else:
+                city, country = '', 'FR'
+            if org_slug and slug:
+                job_url = f'https://www.welcometothejungle.com/fr/companies/{org_slug}/jobs/{slug}'
+            else:
+                continue
+            location = f'{city}, {country}' if city else country
+            if title and company:
+                jobs.append({
+                    'company': company.strip(),
+                    'title': title.strip(),
+                    'url': job_url,
+                    'location': location.strip(),
+                    'source': 'WTTJ',
+                })
+    except Exception as e:
+        print(f'  WTTJ hot jobs error ({query}): {e}')
+    return jobs
+
+
 def get_hot_job_location_tier(location):
     """Return location priority: Paris(0) → France(1) → EMEA(2) → Other(3)."""
     loc = location.lower()
@@ -576,16 +628,25 @@ def fetch_hot_jobs(tracker):
         max_slots = 8 if category in ('Tech Lead / Lead Developer', 'AI / GenAI Engineer') else 5
         slots_needed = max_slots - len(kept)
 
-        # Only fetch from LinkedIn if we have empty slots
+        # Only fetch from LinkedIn + WTTJ if we have empty slots
         if slots_needed > 0:
-            print(f"  [{category}] {len(kept)} kept, need {slots_needed} more - fetching LinkedIn...")
+            print(f"  [{category}] {len(kept)} kept, need {slots_needed} more - fetching LinkedIn + WTTJ...")
             existing_urls = global_urls
             existing_keys = global_keys
 
             candidates = []
+            wttj_queried = set()  # Avoid duplicate WTTJ queries per category
             for keywords, location in query_list:
                 jobs = fetch_linkedin_jobs(keywords, location)
-                print(f"    '{keywords}' in '{location}': {len(jobs)} results")
+                # Also fetch WTTJ for France/Paris queries (FR index covers all of France)
+                loc_lower = location.lower()
+                if any(x in loc_lower for x in ('france', 'paris')) and keywords not in wttj_queried:
+                    wttj_jobs = fetch_wttj_jobs(keywords)
+                    print(f"    WTTJ '{keywords}': {len(wttj_jobs)} results")
+                    jobs += wttj_jobs
+                    wttj_queried.add(keywords)
+                    time.sleep(1)
+                print(f"    '{keywords}' in '{location}': {len(jobs)} results (LinkedIn+WTTJ)")
                 for job in jobs:
                     if job['url'] in existing_urls:
                         continue
@@ -683,8 +744,13 @@ def build_hot_jobs_html(hot_jobs_by_category):
             for job in jobs:
                 tier = get_hot_job_location_tier(job['location'])
                 badge = TIER_BADGES.get(tier, '')
+                source = job.get('source', 'LinkedIn')
+                if source == 'WTTJ':
+                    source_badge = '<span style="background: #1dbe72; color: white; padding: 1px 4px; border-radius: 4px; font-size: 8px; margin-left: 4px; vertical-align: middle;">WTTJ</span>'
+                else:
+                    source_badge = '<span style="background: #0077b5; color: white; padding: 1px 4px; border-radius: 4px; font-size: 8px; margin-left: 4px; vertical-align: middle;">LI</span>'
                 html += f"""                <tr style="border-bottom: 1px solid #ecf0f1;">
-                    <td style="padding: 4px 6px; font-weight: bold;">{job['company']}</td>
+                    <td style="padding: 4px 6px; font-weight: bold;">{job['company']}{source_badge}</td>
                     <td style="padding: 4px 6px;"><a href="{job['url']}" style="color: #e65100; text-decoration: underline;">{job['title']}</a></td>
                     <td style="padding: 4px 6px;"><span style="background: #fff3e0; padding: 1px 6px; border-radius: 8px; font-size: 9px;">{badge}</span> {job['location']}</td>
                 </tr>
