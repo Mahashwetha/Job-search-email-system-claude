@@ -516,6 +516,68 @@ def fetch_wttj_jobs(query):
     return jobs
 
 
+def fetch_builtin_jobs(query):
+    """Fetch jobs from BuiltIn EU/France via HTML scraping (limited, SPA-rendered).
+    Returns jobs visible in the server-side HTML — typically 1-3 per query.
+    """
+    jobs = []
+    try:
+        clean_query = query.replace('+', ' ')
+        url = 'https://builtin.com/jobs/eu/france'
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html',
+        }
+        resp = requests.get(url, params={'search': clean_query}, headers=headers, timeout=15)
+        if resp.status_code != 200:
+            return jobs
+        import re as _re
+        slugs = _re.findall(r'href="(/job/[^"]+)"', resp.text)
+        seen = set()
+        for slug in slugs:
+            job_url = f'https://builtin.com{slug}'
+            if job_url in seen:
+                continue
+            seen.add(job_url)
+            # Derive title from slug: /job/senior-java-backend-dev/12345 -> Senior Java Backend Dev
+            title_part = slug.replace('/job/', '').rsplit('/', 1)[0]
+            title = title_part.replace('-', ' ').title()
+            jobs.append({
+                'company': '',
+                'title': title,
+                'url': job_url,
+                'location': 'France',
+                'source': 'BuiltIn',
+            })
+    except Exception as e:
+        print(f'  BuiltIn hot jobs error ({query}): {e}')
+    return jobs
+
+
+def fetch_builtin_company(job_url):
+    """Fetch company name from a BuiltIn job detail page via page title."""
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        resp = requests.get(job_url, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            return ''
+        import re as _re
+        m = _re.search(r'<title[^>]*>(.+?)</title>', resp.text, _re.I)
+        if not m:
+            return ''
+        # Format: "Job Title - Company Name | Built In"
+        # Use rsplit to get the last segment before " | Built In" (handles company names with " - ")
+        title_text = m.group(1)
+        if ' | ' in title_text:
+            before_pipe = title_text.split(' | ')[0]
+            if ' - ' in before_pipe:
+                company = before_pipe.rsplit(' - ', 1)[1].strip()
+                return company
+    except Exception:
+        pass
+    return ''
+
+
 def get_hot_job_location_tier(location):
     """Return location priority: Paris(0) → France(1) → EMEA(2) → Other(3)."""
     loc = location.lower()
@@ -564,7 +626,9 @@ def save_hot_jobs_current(current_jobs, blocklist=None):
 
 def _is_in_tracker(job_company, tracker_names):
     """Check if a job company matches any tracker company (substring both ways)."""
-    return any(t in job_company or job_company in t for t in tracker_names)
+    if not job_company:  # BuiltIn jobs have empty company — can't match tracker
+        return False
+    return any((t in job_company or job_company in t) for t in tracker_names if len(t) >= 3)
 
 
 def _is_blocklisted(job_company, job_title, blocklist):
@@ -626,19 +690,21 @@ def fetch_hot_jobs(tracker):
                 kept.append(job)
 
         max_slots = 8 if category in ('Tech Lead / Lead Developer', 'AI / GenAI Engineer') else 5
+
+        # Always reserve 1 slot for BuiltIn — drop last non-BuiltIn job if all slots full
+        has_builtin = any(j.get('source') == 'BuiltIn' for j in kept)
+        if not has_builtin and len(kept) >= max_slots:
+            kept = kept[:max_slots - 1]  # free up 1 slot for BuiltIn
         slots_needed = max_slots - len(kept)
 
-        # Only fetch from LinkedIn + WTTJ if we have empty slots
-        if slots_needed > 0:
-            print(f"  [{category}] {len(kept)} kept, need {slots_needed} more - fetching LinkedIn + WTTJ...")
+        def _get_candidates(slots_needed):
             existing_urls = global_urls
             existing_keys = global_keys
-
             candidates = []
-            wttj_queried = set()  # Avoid duplicate WTTJ queries per category
+            wttj_queried = set()
+            builtin_queried = set()
             for keywords, location in query_list:
                 jobs = fetch_linkedin_jobs(keywords, location)
-                # Also fetch WTTJ for France/Paris queries (FR index covers all of France)
                 loc_lower = location.lower()
                 if any(x in loc_lower for x in ('france', 'paris')) and keywords not in wttj_queried:
                     wttj_jobs = fetch_wttj_jobs(keywords)
@@ -646,22 +712,29 @@ def fetch_hot_jobs(tracker):
                     jobs += wttj_jobs
                     wttj_queried.add(keywords)
                     time.sleep(1)
-                print(f"    '{keywords}' in '{location}': {len(jobs)} results (LinkedIn+WTTJ)")
+                if any(x in loc_lower for x in ('france', 'paris')) and keywords not in builtin_queried:
+                    builtin_jobs = fetch_builtin_jobs(keywords)
+                    if builtin_jobs:
+                        print(f"    BuiltIn '{keywords}': {len(builtin_jobs)} results")
+                        jobs += builtin_jobs
+                    builtin_queried.add(keywords)
+                print(f"    '{keywords}' in '{location}': {len(jobs)} results (LinkedIn+WTTJ+BuiltIn)")
                 for job in jobs:
                     if job['url'] in existing_urls:
                         continue
-                    key = (job['company'].lower().strip(), job['title'].lower().strip())
+                    if job.get('source') == 'BuiltIn':
+                        key = ('', job['title'].lower().strip())
+                    else:
+                        key = (job['company'].lower().strip(), job['title'].lower().strip())
                     if key in existing_keys:
                         continue
                     if _is_in_tracker(job['company'].lower().strip(), tracker_names):
                         continue
                     if _is_blocklisted(job['company'].lower().strip(), job['title'].lower().strip(), blocklist):
                         continue
-                    # Global title exclusions (all categories)
                     title_lower = job['title'].lower()
                     if any(kw in title_lower for kw in ('stage', 'alternance', 'alternant', 'internship', 'intern')):
                         continue
-                    # Apply per-category title filter
                     if title_filter:
                         if not any(kw in title_lower for kw in title_filter):
                             continue
@@ -669,9 +742,35 @@ def fetch_hot_jobs(tracker):
                     existing_keys.add(key)
                     candidates.append(job)
                 time.sleep(2)
+            return candidates
 
-            # Sort candidates by location tier
+        if slots_needed > 0:
+            print(f"  [{category}] {len(kept)} kept, need {slots_needed} more - fetching LinkedIn + WTTJ + BuiltIn (1 slot reserved)...")
+            candidates = _get_candidates(slots_needed)
+
+            # Sort by location tier
             candidates.sort(key=lambda j: get_hot_job_location_tier(j['location']))
+
+            # Promote 1 BuiltIn to front — if none found, all slots go to WTTJ/LinkedIn
+            # Fetch company name for each BuiltIn candidate and re-check tracker
+            builtin_candidates = [j for j in candidates if j.get('source') == 'BuiltIn']
+            other_candidates   = [j for j in candidates if j.get('source') != 'BuiltIn']
+            winner = None
+            for bc in builtin_candidates:
+                if not bc.get('company'):
+                    bc['company'] = fetch_builtin_company(bc['url'])
+                if bc['company'] and _is_in_tracker(bc['company'].lower().strip(), tracker_names):
+                    print(f"    BuiltIn candidate '{bc['title']}' @ {bc['company']} in tracker, skipping")
+                    continue
+                winner = bc
+                break
+            if winner:
+                remaining_builtin = [b for b in builtin_candidates if b is not winner]
+                candidates = [winner] + other_candidates + remaining_builtin
+                print(f"    BuiltIn reserved slot: '{winner['title']}' @ {winner['company'] or '?'}")
+            else:
+                candidates = other_candidates
+                print(f"    BuiltIn reserved slot: none found, falling back to WTTJ/LinkedIn")
 
             # For description-required categories, fetch each description and filter.
             # If the fetch returns empty (rate-limited / no match), accept the job
@@ -747,6 +846,8 @@ def build_hot_jobs_html(hot_jobs_by_category):
                 source = job.get('source', 'LinkedIn')
                 if source == 'WTTJ':
                     source_badge = '<span style="background: #1dbe72; color: white; padding: 1px 4px; border-radius: 4px; font-size: 8px; margin-left: 4px; vertical-align: middle;">WTTJ</span>'
+                elif source == 'BuiltIn':
+                    source_badge = '<span style="background: #f97316; color: white; padding: 1px 4px; border-radius: 4px; font-size: 8px; margin-left: 4px; vertical-align: middle;">BuiltIn</span>'
                 else:
                     source_badge = '<span style="background: #0077b5; color: white; padding: 1px 4px; border-radius: 4px; font-size: 8px; margin-left: 4px; vertical-align: middle;">LI</span>'
                 html += f"""                <tr style="border-bottom: 1px solid #ecf0f1;">
