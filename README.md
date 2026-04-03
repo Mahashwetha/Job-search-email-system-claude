@@ -340,6 +340,7 @@ This project includes 5 built-in skills for [Claude Code](https://claude.ai/code
 
 | Skill | Auto-triggers when you say... |
 |-------|-------------------------------|
+| **search** | "have I applied to [company]", "is [company] in tracker", "check [url]", "already applied [url]", "search [company]", "did I apply to [company]" |
 | **reject-job** | "reject [company]", "hide this job", "don't show [company] again", "add to blocklist" |
 | **remove-hot-job** | "remove [company] from hot jobs", "clear senior java hot jobs", "I applied to [company] from hot jobs" |
 | **test-run** | "run daily jobs", "test the remote search", "trigger the job email", "send the digest now" |
@@ -402,6 +403,7 @@ claude-job-agent/
 ├── README.md                          # This file
 └── .claude/
     └── skills/
+        ├── search/SKILL.md            # Auto-triggered: search tracker by company or URL
         ├── reject-job/SKILL.md        # Auto-triggered: reject/hide remote jobs
         ├── test-run/SKILL.md          # Auto-triggered: manually run daily or remote search
         ├── update-hr/SKILL.md         # Auto-triggered: find and add HR contacts
