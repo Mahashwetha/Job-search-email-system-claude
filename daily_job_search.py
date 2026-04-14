@@ -480,7 +480,7 @@ def fetch_wttj_jobs(query):
             'User-Agent': 'Mozilla/5.0',
         }
         clean_query = query.replace('+', ' ')
-        payload = {'params': f'query={clean_query}&hitsPerPage=20'}
+        payload = {'params': f'query={clean_query}&hitsPerPage=30'}
         resp = requests.post(url, headers=headers, json=payload, timeout=15)
         if resp.status_code != 200:
             return jobs
@@ -748,8 +748,12 @@ def fetch_hot_jobs(tracker):
             print(f"  [{category}] {len(kept)} kept, need {slots_needed} more - fetching LinkedIn + WTTJ + BuiltIn (1 slot reserved)...")
             candidates = _get_candidates(slots_needed)
 
-            # Sort by location tier
-            candidates.sort(key=lambda j: get_hot_job_location_tier(j['location']))
+            # Sort by location tier, then source priority (WTTJ before LinkedIn)
+            SOURCE_PRIORITY = {'WTTJ': 0, 'LinkedIn': 1, 'BuiltIn': 2}
+            candidates.sort(key=lambda j: (
+                get_hot_job_location_tier(j['location']),
+                SOURCE_PRIORITY.get(j.get('source', ''), 3),
+            ))
 
             # Promote 1 BuiltIn to front — if none found, all slots go to WTTJ/LinkedIn
             # Fetch company name for each BuiltIn candidate and re-check tracker
