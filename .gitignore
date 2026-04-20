@@ -11,6 +11,9 @@ resume_adjusted/
 # But DO track the resume tailor script
 !resume_tailor.py
 
+# Email outreach templates (personal content, do not commit)
+emailoutreach/
+
 # Excel tracker with private data
 *.xlsx
 # But DO track the template

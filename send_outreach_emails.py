@@ -6,12 +6,16 @@ Usage:
 
 The script will:
   1. Look up the role from your tracker automatically
-  2. Pick the right template (followup if applied, cold outreach if not)
+  2. Always use the cold outreach (Jinka-style) template
   3. Show you a preview
   4. Ask yes/no before sending
 
 Optional:
   --cc "someone@company.com"   Add a CC recipient
+
+-------------------------------------------------------------------
+USER CONFIG — update these paths to match your local setup
+-------------------------------------------------------------------
 """
 
 import argparse
@@ -24,14 +28,25 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email import encoders
 
-BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
-RESUME_DIR   = os.path.join(BASE_DIR, 'resume')
-TEMPLATE_DIR = os.path.join(BASE_DIR, 'emailoutreach')
+# ---------------------------------------------------------------
+# PATHS — edit these to point to your local folders
+# ---------------------------------------------------------------
 
+# Folder containing your resume and portfolio PDFs
+# Example: r"C:\Users\yourname\Documents\Resume" or "/home/yourname/resume"
+RESUME_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'resume')
+
+# Folder containing your email templates (cold_outreach_template.txt, followup_template.txt)
+# Example: r"C:\Users\yourname\Documents\EmailTemplates"
+TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'emailoutreach')
+
+# PDF files to attach — update filenames to match your actual files
 ATTACHMENTS = [
-    os.path.join(RESUME_DIR, 'mahashwetharao_resume_2026_English.pdf'),
-    os.path.join(RESUME_DIR, 'portfolio_personal_projects_mahashwetha.pdf'),
+    os.path.join(RESUME_DIR, 'mahashwetharao_resume_2026_English.pdf'),       # <-- your resume PDF
+    os.path.join(RESUME_DIR, 'portfolio_personal_projects_mahashwetha.pdf'),   # <-- your portfolio PDF
 ]
+
+# ---------------------------------------------------------------
 
 try:
     from config import EMAIL_CONFIG, TRACKER_FILE
@@ -117,15 +132,15 @@ def main():
 
     first_name = args.name.split()[0]
 
-    # Auto-detect role and template
+    # Auto-detect role; always use cold outreach (Jinka-style) for first HR contact
     role = find_role_in_tracker(args.company)
     if role:
-        template_file = 'followup_template.txt'
-        print(f"Found in tracker: {args.company} | {role} -> using followup template")
+        print(f"Found in tracker: {args.company} | {role}")
     else:
-        template_file = 'cold_outreach_template.txt'
         role = args.company + ' opportunities'
-        print(f"Not in tracker: {args.company} -> using cold outreach template")
+        print(f"Not in tracker: {args.company} -> role set to '{role}'")
+    template_file = 'cold_outreach_template.txt'
+    print(f"Using cold outreach template")
 
     template = load_template(template_file)
     filled   = fill_template(template, first_name, args.company, role)
