@@ -377,7 +377,7 @@ python resume_tailor.py "https://company.workdayjobs.com/job/..." "Company Name"
 
 ## Claude Code Skills
 
-This project includes 8 built-in skills for [Claude Code](https://claude.ai/code). Skills load automatically — just describe what you want in plain language and Claude picks the right one.
+This project includes 9 built-in skills for [Claude Code](https://claude.ai/code). Skills load automatically — just describe what you want in plain language and Claude picks the right one.
 
 | Skill | Auto-triggers when you say... |
 |-------|-------------------------------|
@@ -390,6 +390,7 @@ This project includes 8 built-in skills for [Claude Code](https://claude.ai/code
 | **test-run** | "run daily jobs", "test the remote search", "trigger the job email", "send the digest now" |
 | **update-hr** | "find HR for [company]", "add recruiter for [company]", "search LinkedIn for [company]" |
 | **resume-tailor** | "tailor resume for [company]", "generate resume for [job]", "adapt my resume to this role" |
+| **send-outreach** | "send outreach to [name] at [company]", "email HR at [company]", "send cold email to [name]", "reach out to [company]", "outreach [company]" |
 
 No slash commands needed. Each skill encodes the project-specific workflow, gotchas, and script paths — so Claude follows the right steps automatically without needing reminders each session.
 
@@ -461,7 +462,8 @@ claude-job-agent/
         ├── remove-hot-job/SKILL.md    # Auto-triggered: remove & blocklist hot jobs
         ├── test-run/SKILL.md          # Auto-triggered: manually run daily or remote search
         ├── update-hr/SKILL.md         # Auto-triggered: find and add HR contacts
-        └── resume-tailor/SKILL.md     # Auto-triggered: tailor resume for a company
+        ├── resume-tailor/SKILL.md     # Auto-triggered: tailor resume for a company
+        └── send-outreach/SKILL.md     # Auto-triggered: send cold outreach email to HR contact
 ```
 
 ## How It Works
