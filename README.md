@@ -5,10 +5,11 @@ An end-to-end automated job search pipeline that handles everything from finding
 ## Features
 
 - **Daily Email Reports** - Styled HTML emails at 11:00 AM CET with companies grouped by role and status
-- **Hot Jobs Section** - Sticky listings from **LinkedIn + Welcome to the Jungle + BuiltIn** (fully configurable role categories, 5–8 slots per category) that persist until you add a company to your tracker, then backfill just that slot — 1 slot per category is always reserved for BuiltIn, with automatic fallback to WTTJ/LinkedIn if none found — each job shows a coloured source badge (🔵 LI / 🟢 WTTJ / 🟠 BuiltIn)
+- **Hot Jobs Section** - Sticky listings from **LinkedIn + Welcome to the Jungle + BuiltIn** (fully configurable role categories, 5–8 slots per category) that persist until you add a company to your tracker, then backfill just that slot — 1 slot per category is always reserved for BuiltIn, with automatic fallback to WTTJ/LinkedIn if none found — each job shows a coloured source badge (🔵 LI / 🟢 WTTJ / 🟠 BuiltIn) — **WTTJ is prioritised first** within each location tier (hitsPerPage 30, source priority sort)
 - **Remote Job Scanner** - Fetches from RemoteOK, Remotive, and Arbeitnow APIs every 2 days, filters for EMEA-compatible roles
 - **Resume Tailor** - Per-company tailored resumes using Gemini 2.5 Flash (free tier) — never fabricates, only reorders and surfaces existing skills
 - **Outreach Drafter** - Auto-generates short/medium/long LinkedIn message templates for each applied company
+- **HR Outreach Emails** - CLI script to send personalised cold outreach emails to HR contacts with resume + portfolio attached — auto-detects role from tracker, always previews before sending
 - **Excel Integration** - Reads your application tracker daily for statuses, role links, and HR contacts
 - **HR Contact Management** - Maintains recruiter contacts with clickable LinkedIn hyperlinks
 - **Platform Aggregators** - Curated search links (Glassdoor, LinkedIn, WelcomeToTheJungle, etc.)
@@ -209,6 +210,46 @@ The daily email script reads the potentialHR contact column **fresh from your Ex
 
 > **Note:** `update_hr_contacts.py` is gitignored because it contains real contact data.
 
+## HR Outreach Emails
+
+Send personalised cold outreach emails directly to HR/Talent Acquisition contacts — with your resume and portfolio attached — via a single CLI command.
+
+```bash
+python send_outreach_emails.py --name "Andrea Smith" --email "andrea@company.com" --company "Acme Corp"
+# Optional CC:
+python send_outreach_emails.py --name "Andrea Smith" --email "andrea@company.com" --company "Acme Corp" --cc "talent@company.com"
+```
+
+**How it works:**
+1. Looks up the applied role from your Excel tracker automatically
+2. Fills placeholders (`{first_name}`, `{company}`, `{role}`) in your template
+3. Shows a full preview of the email in the terminal
+4. Asks for yes/no confirmation before sending — nothing goes out without your approval
+5. Attaches your resume and portfolio PDFs
+
+**Templates** live in an `emailoutreach/` folder (local only, gitignored — personal content):
+- `cold_outreach_template.txt` — rich outreach with bullet points about your background (default for all HR contact)
+- `followup_template.txt` — short 3-line nudge (for second follow-up after no reply)
+
+**Setup — paths to configure in `send_outreach_emails.py`:**
+```python
+# Folder containing your resume and portfolio PDFs
+RESUME_DIR = os.path.join(BASE_DIR, 'resume')
+
+# Folder containing your email templates
+TEMPLATE_DIR = os.path.join(BASE_DIR, 'emailoutreach')
+
+# Your actual PDF filenames
+ATTACHMENTS = [
+    os.path.join(RESUME_DIR, 'your_resume.pdf'),
+    os.path.join(RESUME_DIR, 'your_portfolio.pdf'),
+]
+```
+
+> **Note:** `emailoutreach/` is gitignored — create it locally and add your own templates. `resume/` is also gitignored — copy your PDFs there.
+
+---
+
 ## Outreach Drafter
 
 After sending the daily email, the system automatically generates LinkedIn outreach drafts for all applied companies (status = "done") that have HR contacts.
@@ -336,12 +377,15 @@ python resume_tailor.py "https://company.workdayjobs.com/job/..." "Company Name"
 
 ## Claude Code Skills
 
-This project includes 5 built-in skills for [Claude Code](https://claude.ai/code). Skills load automatically — just describe what you want in plain language and Claude picks the right one.
+This project includes 8 built-in skills for [Claude Code](https://claude.ai/code). Skills load automatically — just describe what you want in plain language and Claude picks the right one.
 
 | Skill | Auto-triggers when you say... |
 |-------|-------------------------------|
-| **search** | "have I applied to [company]", "is [company] in tracker", "check [url]", "already applied [url]", "search [company]", "did I apply to [company]" |
+| **new-job** | "new job [url]", "I applied to [company]", "add to tracker" |
+| **mark-rejected** | "[company] rejected", "mark [company] as rejected" |
+| **search** | "have I applied to [company]", "is [company] in tracker", "check [url]", "already applied [url]" |
 | **reject-job** | "reject [company]", "hide this job", "don't show [company] again", "add to blocklist" |
+| **open-hot-jobs** | "open all hot jobs", "open [category] hot jobs" |
 | **remove-hot-job** | "remove [company] from hot jobs", "clear senior java hot jobs", "I applied to [company] from hot jobs" |
 | **test-run** | "run daily jobs", "test the remote search", "trigger the job email", "send the digest now" |
 | **update-hr** | "find HR for [company]", "add recruiter for [company]", "search LinkedIn for [company]" |
@@ -382,17 +426,23 @@ claude-job-agent/
 ├── daily_hot_jobs.json                # Sticky hot jobs state (auto-generated, gitignored)
 ├── outreach_drafter.py                # LinkedIn outreach draft generator
 ├── resume_tailor.py                   # Per-company resume tailoring via Gemini AI
+├── send_outreach_emails.py            # CLI: send cold outreach emails to HR with PDF attachments
 ├── remote_search/
 │   ├── remote_job_search.py           # Remote job API scanner (EMEA filter + Excel dump)
 │   ├── reject_remote.py               # CLI to manage rejected jobs list
 │   ├── rejected_remote.json           # Reviewed & rejected (company, title) pairs
 │   ├── previous_jobs.json             # Last run's job keys for new-job detection (auto-generated)
 │   └── run_remote_job_search.bat      # Scheduler wrapper for remote search
+├── emailoutreach/                     # Email templates — LOCAL ONLY (gitignored, create your own)
+│   ├── cold_outreach_template.txt     # Rich cold outreach with bullet points (default)
+│   └── followup_template.txt          # Short follow-up nudge (second contact)
+├── resume/                            # Resume + portfolio PDFs — LOCAL ONLY (gitignored)
+│   ├── your_resume.pdf
+│   └── your_portfolio.pdf
 ├── config.template.py                 # Configuration template (copy to config.py)
 ├── config.py                          # Your private configuration (gitignored)
 ├── update_hr_contacts.template.py     # HR contacts updater template
 ├── update_hr_contacts.py              # Your HR contacts data (gitignored)
-├── resume/                            # Base resume DOCX (gitignored)
 ├── run_daily_job_search.bat           # Scheduler wrapper for daily email
 ├── setup_task_admin.bat               # Easy setup for scheduled task
 ├── setup_scheduled_task.ps1           # PowerShell setup script
@@ -403,8 +453,12 @@ claude-job-agent/
 ├── README.md                          # This file
 └── .claude/
     └── skills/
+        ├── new-job/SKILL.md           # Auto-triggered: add new job to tracker
+        ├── mark-rejected/SKILL.md     # Auto-triggered: mark company as rejected
         ├── search/SKILL.md            # Auto-triggered: search tracker by company or URL
         ├── reject-job/SKILL.md        # Auto-triggered: reject/hide remote jobs
+        ├── open-hot-jobs/SKILL.md     # Auto-triggered: open hot job links in browser
+        ├── remove-hot-job/SKILL.md    # Auto-triggered: remove & blocklist hot jobs
         ├── test-run/SKILL.md          # Auto-triggered: manually run daily or remote search
         ├── update-hr/SKILL.md         # Auto-triggered: find and add HR contacts
         └── resume-tailor/SKILL.md     # Auto-triggered: tailor resume for a company
@@ -611,7 +665,7 @@ For issues or questions:
 
 ---
 
-**Built with Claude Code** | **Last Updated:** 2026-03-31
+**Built with Claude Code** | **Last Updated:** 2026-04-20
 
 ---
 
