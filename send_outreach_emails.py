@@ -1,73 +1,63 @@
 """
 Outreach Email Sender
-Sends a personalised outreach email to an HR contact using a template.
 
 Usage:
-    python send_outreach_emails.py \\
-        --name   "Andrea Hallery" \\
-        --email  "andrea.hallery@natixis.com" \\
-        --cc     "clemence.pedral@natixis.com" \\
-        --company "Natixis CIB" \\
-        --role   "Tech Lead Pricing Pre Trade" \\
-        --template followup
+    python send_outreach_emails.py --name "Andrea Hallery" --email "andrea.hallery@natixis.com" --company "Natixis CIB"
 
-    Templates (in emailoutreach/):
-        followup  → followup_template.txt   (for roles already applied to)
-        cold      → cold_outreach_template.txt  (spontaneous / cold outreach)
+The script will:
+  1. Look up the role from your tracker automatically
+  2. Pick the right template (followup if applied, cold outreach if not)
+  3. Show you a preview
+  4. Ask yes/no before sending
 
-    Always previews first.
-    Add --send to actually send the email.
-
-Examples:
-    # Preview only
-    python send_outreach_emails.py --name "Lucie Delavay" --email "lucie.delavay@filigran.io" --company "Filigran" --role "Staff Tech Lead OpenCTI" --template followup
-
-    # Send
-    python send_outreach_emails.py --name "Lucie Delavay" --email "lucie.delavay@filigran.io" --company "Filigran" --role "Staff Tech Lead OpenCTI" --template followup --send
+Optional:
+  --cc "someone@company.com"   Add a CC recipient
 """
 
 import argparse
 import os
 import re
 import smtplib
+import openpyxl
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email import encoders
 
-# ============= PATHS (no personal data — safe for GitHub) =============
-
-BASE_DIR      = os.path.dirname(os.path.abspath(__file__))
-RESUME_DIR    = os.path.join(BASE_DIR, 'resume')
-TEMPLATE_DIR  = os.path.join(BASE_DIR, 'emailoutreach')
+BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
+RESUME_DIR   = os.path.join(BASE_DIR, 'resume')
+TEMPLATE_DIR = os.path.join(BASE_DIR, 'emailoutreach')
 
 ATTACHMENTS = [
     os.path.join(RESUME_DIR, 'mahashwetharao_resume_2026_English.pdf'),
     os.path.join(RESUME_DIR, 'portfolio_personal_projects_mahashwetha.pdf'),
 ]
 
-TEMPLATES = {
-    'followup': 'followup_template.txt',
-    'cold':     'cold_outreach_template.txt',
-}
-
-# ============= CONFIG =============
-
 try:
-    from config import EMAIL_CONFIG
+    from config import EMAIL_CONFIG, TRACKER_FILE
 except ImportError:
-    print("ERROR: config.py not found. Copy config.template.py to config.py.")
+    print("ERROR: config.py not found.")
     raise SystemExit(1)
 
 
-# ============= HELPERS =============
+def find_role_in_tracker(company):
+    """Look up the most recent active role for a company in the tracker."""
+    try:
+        wb = openpyxl.load_workbook(TRACKER_FILE, data_only=True)
+        ws = wb.active
+        for row in reversed(list(ws.iter_rows(min_row=2, values_only=True))):
+            co = str(row[0]).strip() if row[0] else ""
+            role = str(row[1]).strip() if row[1] else ""
+            status = str(row[3]).strip().lower() if row[3] else ""
+            if company.lower() in co.lower() and status == 'done':
+                return role
+    except Exception:
+        pass
+    return None
+
 
 def load_template(name):
-    filename = TEMPLATES.get(name)
-    if not filename:
-        print(f"ERROR: Unknown template '{name}'. Choose from: {list(TEMPLATES)}")
-        raise SystemExit(1)
-    path = os.path.join(TEMPLATE_DIR, filename)
+    path = os.path.join(TEMPLATE_DIR, name)
     with open(path, encoding='utf-8') as f:
         return f.read()
 
@@ -79,39 +69,16 @@ def fill_template(template, first_name, company, role):
 
 
 def extract_subject(filled):
-    """Extract subject line from template (first line after SUBJECT:)."""
     match = re.search(r'SUBJECT:\s*(.+)', filled)
-    if match:
-        return match.group(1).strip()
-    return "Application Follow-up"
+    return match.group(1).strip() if match else "Application Follow-up"
 
 
 def extract_body(filled):
-    """Extract body — everything after the --- separator."""
     parts = filled.split('---', 1)
-    if len(parts) > 1:
-        return parts[1].strip()
-    return filled.strip()
+    return parts[1].strip() if len(parts) > 1 else filled.strip()
 
 
-def preview(to, cc, subject, body):
-    print("\n" + "=" * 60)
-    print(f"TO:      {to}")
-    if cc:
-        print(f"CC:      {cc}")
-    print(f"SUBJECT: {subject}")
-    print("-" * 60)
-    print(body)
-    print("=" * 60)
-    missing = [p for p in ATTACHMENTS if not os.path.exists(p)]
-    found   = [os.path.basename(p) for p in ATTACHMENTS if os.path.exists(p)]
-    print(f"ATTACHMENTS: {', '.join(found)}")
-    if missing:
-        print(f"WARNING — missing: {', '.join(missing)}")
-    print()
-
-
-def send(to, cc, subject, body):
+def send_email(to, cc, subject, body):
     msg = MIMEMultipart()
     msg['From']    = EMAIL_CONFIG['sender_email']
     msg['To']      = to
@@ -138,40 +105,52 @@ def send(to, cc, subject, body):
     server.login(EMAIL_CONFIG['sender_email'], EMAIL_CONFIG['sender_password'])
     server.sendmail(EMAIL_CONFIG['sender_email'], recipients, msg.as_string())
     server.quit()
-    print(f"  SENT to {to}" + (f" (CC: {cc})" if cc else ""))
 
-
-# ============= MAIN =============
 
 def main():
-    parser = argparse.ArgumentParser(description='Send outreach email to HR contact.')
-    parser.add_argument('--name',     required=True,  help='HR contact full name, e.g. "Andrea Hallery"')
-    parser.add_argument('--email',    required=True,  help='HR contact email')
-    parser.add_argument('--cc',       default='',     help='CC email (optional)')
-    parser.add_argument('--company',  required=True,  help='Company name')
-    parser.add_argument('--role',     required=True,  help='Role title')
-    parser.add_argument('--template', required=True,  choices=list(TEMPLATES), help='Template: followup | cold')
-    parser.add_argument('--send',     action='store_true', help='Actually send (omit for dry-run preview)')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--name',    required=True, help='HR contact full name')
+    parser.add_argument('--email',   required=True, help='HR contact email')
+    parser.add_argument('--company', required=True, help='Company name')
+    parser.add_argument('--cc',      default='',    help='CC email (optional)')
     args = parser.parse_args()
 
     first_name = args.name.split()[0]
-    template   = load_template(args.template)
-    filled     = fill_template(template, first_name, args.company, args.role)
-    subject    = extract_subject(filled)
-    body       = extract_body(filled)
 
-    preview(args.email, args.cc, subject, body)
+    # Auto-detect role and template
+    role = find_role_in_tracker(args.company)
+    if role:
+        template_file = 'followup_template.txt'
+        print(f"Found in tracker: {args.company} | {role} -> using followup template")
+    else:
+        template_file = 'cold_outreach_template.txt'
+        role = args.company + ' opportunities'
+        print(f"Not in tracker: {args.company} -> using cold outreach template")
 
-    if not args.send:
-        print("DRY RUN — add --send to actually send this email.")
-        return
+    template = load_template(template_file)
+    filled   = fill_template(template, first_name, args.company, role)
+    subject  = extract_subject(filled)
+    body     = extract_body(filled)
+
+    # Preview
+    print("\n" + "=" * 60)
+    print(f"TO:      {args.email}")
+    if args.cc:
+        print(f"CC:      {args.cc}")
+    print(f"SUBJECT: {subject}")
+    print("-" * 60)
+    print(body)
+    print("=" * 60)
+    found = [os.path.basename(p) for p in ATTACHMENTS if os.path.exists(p)]
+    print(f"ATTACHMENTS: {', '.join(found)}\n")
 
     confirm = input("Send this email? (yes/no): ").strip().lower()
     if confirm != 'yes':
         print("Cancelled.")
         return
 
-    send(args.email, args.cc, subject, body)
+    send_email(args.email, args.cc, subject, body)
+    print(f"Sent to {args.email}")
 
 
 if __name__ == '__main__':
