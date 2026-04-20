@@ -1,6 +1,8 @@
 # Claude Job Search Agent 🎯
 
-An end-to-end automated job search pipeline that handles everything from finding opportunities to preparing applications. Sends daily styled HTML email digests from your Excel tracker, scans remote job APIs for EMEA-compatible roles, tailors resumes per company using Gemini AI, and drafts LinkedIn outreach messages — all on autopilot via Windows Task Scheduler.
+An end-to-end automated job search pipeline that handles everything from finding opportunities to preparing applications. Sends daily styled HTML email digests from your Excel tracker, scans remote job APIs for EMEA-compatible roles, tailors resumes per company using Gemini AI, sends HR outreach emails with attachments, and drafts LinkedIn outreach messages — all on autopilot via Windows Task Scheduler.
+
+**Heavily driven by Claude Code Skills** — 9 plain-language voice commands cover the entire workflow: adding jobs, rejecting, opening hot jobs, emailing HR, tailoring resumes, and more. No scripts to remember, no flags to type.
 
 ## Features
 
@@ -14,6 +16,7 @@ An end-to-end automated job search pipeline that handles everything from finding
 - **HR Contact Management** - Maintains recruiter contacts with clickable LinkedIn hyperlinks
 - **Platform Aggregators** - Curated search links (Glassdoor, LinkedIn, WelcomeToTheJungle, etc.)
 - **Windows Automation** - Runs on autopilot via Task Scheduler
+- **Claude Code Skills (9)** - Plain-language commands for every step: add jobs, reject, open hot jobs, email HR, tailor resume, run search — no flags, no scripts to remember, just say what you want
 
 ## Email Previews
 
@@ -377,24 +380,45 @@ python resume_tailor.py "https://company.workdayjobs.com/job/..." "Company Name"
 
 ## Claude Code Skills
 
-This project includes 9 built-in skills for [Claude Code](https://claude.ai/code). Skills load automatically — just describe what you want in plain language and Claude picks the right one.
+Skills are the **primary interface** for this project. Instead of remembering script names, paths, and flags, you just describe what you want in plain language — Claude picks the right skill and executes the full workflow.
 
-| Skill | Auto-triggers when you say... |
-|-------|-------------------------------|
-| **new-job** | "new job [url]", "I applied to [company]", "add to tracker" |
-| **mark-rejected** | "[company] rejected", "mark [company] as rejected" |
-| **search** | "have I applied to [company]", "is [company] in tracker", "check [url]", "already applied [url]" |
-| **reject-job** | "reject [company]", "hide this job", "don't show [company] again", "add to blocklist" |
-| **open-hot-jobs** | "open all hot jobs", "open [category] hot jobs" |
-| **remove-hot-job** | "remove [company] from hot jobs", "clear senior java hot jobs", "I applied to [company] from hot jobs" |
-| **test-run** | "run daily jobs", "test the remote search", "trigger the job email", "send the digest now" |
-| **update-hr** | "find HR for [company]", "add recruiter for [company]", "search LinkedIn for [company]" |
-| **resume-tailor** | "tailor resume for [company]", "generate resume for [job]", "adapt my resume to this role" |
-| **send-outreach** | "send outreach to [name] at [company]", "email HR at [company]", "send cold email to [name]", "reach out to [company]", "outreach [company]" |
+This project includes **9 skills** covering every stage of the job search:
 
-No slash commands needed. Each skill encodes the project-specific workflow, gotchas, and script paths — so Claude follows the right steps automatically without needing reminders each session.
+### Tracker Management
 
-Skills live in `.claude/skills/` and are version-controlled with the project.
+| Skill | What it does | Say something like... |
+|-------|-------------|----------------------|
+| **new-job** | Adds a new job to `List.xlsx` with company, role, URL, and status | "new job https://..." · "I applied to Qonto" · "add to tracker" |
+| **mark-rejected** | Marks a company as Rejected in the tracker | "Deel rejected" · "mark Natixis as rejected" |
+| **search** | Checks if a company or URL is already in the tracker | "have I applied to Datadog?" · "is this url in my tracker?" |
+
+### Hot Jobs
+
+| Skill | What it does | Say something like... |
+|-------|-------------|----------------------|
+| **open-hot-jobs** | Opens all (or a category of) hot job links in the browser | "open all hot jobs" · "open backend java hot jobs" |
+| **remove-hot-job** | Removes a job from the hot list and blocklists it | "remove senior java hot jobs" · "I applied to Theodo from hot jobs" |
+| **reject-job** | Blocklists a company/role from appearing in future hot jobs | "hide this job" · "don't show Capgemini again" |
+
+### Outreach & Applications
+
+| Skill | What it does | Say something like... |
+|-------|-------------|----------------------|
+| **send-outreach** | Sends a cold outreach email to an HR contact — test preview first, then real send | "send outreach to Andrea at Natixis" · "email HR at CFM" · "reach out to Mistral" |
+| **update-hr** | Searches LinkedIn for HR contacts at a company and adds them to the tracker | "find HR for BNP" · "add recruiter for Société Générale" |
+| **resume-tailor** | Fetches the job description and generates a tailored resume via Gemini AI | "tailor resume for Filigran" · "adapt my resume to this role" |
+
+### Pipeline Control
+
+| Skill | What it does | Say something like... |
+|-------|-------------|----------------------|
+| **test-run** | Manually triggers the daily email or remote job scanner | "run daily jobs now" · "send the digest" · "test remote search" |
+
+---
+
+**How skills work:** Each skill is a `SKILL.md` file in `.claude/skills/` that encodes the full workflow — which script to run, what args to pass, what to check, what can go wrong. Claude reads it and follows it exactly. No slash commands, no flags to remember. Just say what you want.
+
+Skills are version-controlled with the project and load automatically in every Claude Code session.
 
 ## Architecture
 
