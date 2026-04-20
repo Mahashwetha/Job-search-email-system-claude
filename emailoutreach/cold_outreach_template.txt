@@ -1,0 +1,25 @@
+SUBJECT: Senior Java Backend Developer in Paris — Candidature Spontanée
+
+---
+
+Hi {first_name},
+
+I'm Mahashwetha Rao, a Senior Java Backend Tech Lead from India with ~12 years of experience (NASDAQ, Cisco), currently based in Paris. I applied for the {role} role and wanted to reach out directly.
+
+My backend roots are deep. I led the Spring AspectJ alerting framework at NASDAQ's SMARTS trade surveillance platform, handling 500+ subscription migrations across APAC, EMEA, and NSAC, and spent 5+ years building high-throughput OTT/Set Top Box systems at Cisco. Over the past year I've been deliberately upskilling in AI: I use the Claude API and Gemini API daily, and built a fully automated job search pipeline from scratch — Python, LLM-driven resume tailoring, multi-API aggregation, all running live on zero infra cost.
+
+A few things that might resonate:
+  • Backend at scale: aggregation pipelines, real-time data handling, Java/Spring at production depth (framework-level improvements, 15% dev effort reduction)
+  • AI-first tooling: building with Claude API + Gemini API in production — github.com/Mahashwetha/Job-search-email-system-claude
+  • Paris, already here — no relocation, no visa complexity, English (full professional) + French (basic proficiency)
+
+I'd love to explore whether my profile fits the role currently open or any future opportunities.
+
+Resume and portfolio are attached.
+
+Thank you for your time.
+
+Best regards,
+Mahashwetha Rao
+mahashwetha91@gmail.com | +33 773 117 085
+https://www.linkedin.com/in/mahashwetha-rao/
