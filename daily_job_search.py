@@ -516,9 +516,33 @@ def fetch_wttj_jobs(query):
     return jobs
 
 
+def fetch_builtin_job_location(job_url):
+    """Fetch actual location from a BuiltIn job detail page."""
+    try:
+        import re as _re
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        resp = requests.get(job_url, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            return ''
+        # Look for location in meta or visible text patterns
+        m = _re.search(r'"jobLocation"[^}]*"addressLocality"\s*:\s*"([^"]+)"', resp.text)
+        if m:
+            return m.group(1)
+        m = _re.search(r'"addressCountry"\s*:\s*"([^"]+)"', resp.text)
+        if m:
+            return m.group(1)
+        # Fallback: look for city/country in og:description or structured data
+        m = _re.search(r'(?:Remote|Paris|France|Bangalore|India|London|Berlin|Amsterdam|Barcelona|Madrid|Dublin|Munich|New York|San Francisco)[^"<]{0,20}', resp.text)
+        if m:
+            return m.group(0).strip()
+    except Exception:
+        pass
+    return ''
+
+
 def fetch_builtin_jobs(query):
     """Fetch jobs from BuiltIn EU/France via HTML scraping (limited, SPA-rendered).
-    Returns jobs visible in the server-side HTML — typically 1-3 per query.
+    Returns only jobs actually located in France/Europe.
     """
     jobs = []
     try:
@@ -539,14 +563,24 @@ def fetch_builtin_jobs(query):
             if job_url in seen:
                 continue
             seen.add(job_url)
-            # Derive title from slug: /job/senior-java-backend-dev/12345 -> Senior Java Backend Dev
+            # Verify actual location — skip non-France/Europe jobs
+            actual_loc = fetch_builtin_job_location(job_url)
+            loc_lower = actual_loc.lower()
+            # Reject if clearly non-European location
+            non_eu = ('india', 'bangalore', 'bengaluru', 'mumbai', 'hyderabad',
+                      'united states', 'canada', 'australia', 'singapore', 'dubai')
+            if any(x in loc_lower for x in non_eu):
+                print(f'  BuiltIn: skipping non-EU job at {actual_loc} — {job_url}')
+                continue
+            # Derive title from slug
             title_part = slug.replace('/job/', '').rsplit('/', 1)[0]
             title = title_part.replace('-', ' ').title()
+            location = actual_loc if actual_loc else 'France'
             jobs.append({
                 'company': '',
                 'title': title,
                 'url': job_url,
-                'location': 'France',
+                'location': location,
                 'source': 'BuiltIn',
             })
     except Exception as e:
