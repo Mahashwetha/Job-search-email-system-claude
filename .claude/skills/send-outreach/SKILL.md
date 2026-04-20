@@ -1,6 +1,6 @@
 ---
 name: send-outreach
-description: This skill should be used when the user wants to send a cold outreach or follow-up email to an HR contact at a company. Triggers on phrases like "send outreach to [name] at [company]", "email HR at [company]", "send cold email to [name]", "outreach [company]", "send mail to [name] [email]", "reach out to [company] HR", "email [name] from [company]", "send outreach email".
+description: This skill should be used when the user wants to send a cold outreach or follow-up email to an HR contact at a company. Triggers on phrases like "send outreach to [name] at [company]", "email HR at [company]", "send cold email to [name]", "outreach [company]", "send mail to [name] [email]", "reach out to [company] HR", "email [name] from [company]", "send outreach email", "send this week's outreach emails", "send weekly outreach", "send the drafted emails".
 ---
 
 # Send HR Outreach Email
@@ -62,3 +62,44 @@ Add `--cc "[CC_EMAIL]"` if a CC was provided.
 - If the script errors on missing attachment, check that `resume/` folder has both PDFs
 - If template not found, check that `emailoutreach/cold_outreach_template.txt` exists
 - Do not hardcode HR contact details anywhere in code or skill files
+
+---
+
+## Weekly draft mode — "send this week's outreach emails"
+
+When triggered by "send this week's outreach emails", "send weekly outreach", or "send the drafted emails":
+
+### Step 1 — Read saved drafts
+Check `C:\Users\mahas\Learnings\claude-job-agent\outreach_drafts\` for `*_draft.txt` files saved by the weekly-hr-search routine.
+
+Parse each file:
+```
+TO: {email}
+SUBJECT: {subject}
+---
+{body}
+```
+
+### Step 2 — Send one by one with confirmation
+For each draft file, show the user:
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMPANY: {company}
+TO: {email}
+SUBJECT: {subject}
+---
+{body}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Send this one? (yes / no / stop)
+```
+
+Wait for explicit user confirmation before sending each one.
+- **yes** → send via `send_outreach_emails.py`, then move to next draft
+- **no** → skip this draft, move to next
+- **stop** → stop processing remaining drafts
+
+### Step 3 — Clean up sent drafts
+After user confirms a draft was sent successfully, delete that `_draft.txt` file so it doesn't appear again next week.
+
+### Fallback — no drafts folder or empty
+If `outreach_drafts/` doesn't exist or has no draft files, fall back to the standard single-email flow and ask the user for `--name`, `--email`, `--company`.
