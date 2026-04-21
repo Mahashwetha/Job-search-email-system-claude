@@ -431,13 +431,16 @@ def fetch_linkedin_jobs(keywords, location):
         locations = re.findall(r'job-search-card__location[^>]*>([^<]+)<', resp.text)
         links = re.findall(r'href="(https://(?:fr|www)\.linkedin\.com/jobs/view/[^"]+)"', resp.text)
 
+        dates = re.findall(r'job-search-card__listdate[^>]*datetime="([^"]+)"', resp.text)
         for i in range(min(len(titles), len(companies), len(locations), len(links))):
             clean_url = unescape(links[i]).split('?')[0]
+            posted_date = dates[i][:10] if i < len(dates) else ''
             jobs.append({
                 'company': unescape(companies[i].strip()),
                 'title': unescape(titles[i].strip()),
                 'url': clean_url,
                 'location': unescape(locations[i].strip()),
+                'posted_date': posted_date,
             })
     except Exception as e:
         print(f"  LinkedIn hot jobs error ({keywords}, {location}): {e}")
@@ -503,6 +506,13 @@ def fetch_wttj_jobs(query):
             else:
                 continue
             location = f'{city}, {country}' if city else country
+            pub_at = hit.get('published_at', '')
+            if isinstance(pub_at, (int, float)) and pub_at:
+                posted_date = datetime.fromtimestamp(pub_at).strftime('%Y-%m-%d')
+            elif isinstance(pub_at, str):
+                posted_date = pub_at[:10]
+            else:
+                posted_date = ''
             if title and company:
                 jobs.append({
                     'company': company.strip(),
@@ -510,6 +520,7 @@ def fetch_wttj_jobs(query):
                     'url': job_url,
                     'location': location.strip(),
                     'source': 'WTTJ',
+                    'posted_date': posted_date,
                 })
     except Exception as e:
         print(f'  WTTJ hot jobs error ({query}): {e}')
@@ -582,6 +593,7 @@ def fetch_builtin_jobs(query):
                 'url': job_url,
                 'location': location,
                 'source': 'BuiltIn',
+                'posted_date': datetime.now().strftime('%Y-%m-%d'),
             })
     except Exception as e:
         print(f'  BuiltIn hot jobs error ({query}): {e}')
@@ -865,16 +877,17 @@ def build_hot_jobs_html(hot_jobs_by_category):
         <table style="border-collapse: collapse; width: 100%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.08); font-size: 11px; margin: 3px 0;">
             <thead>
                 <tr>
-                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="20%">Company</th>
-                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="50%">Role</th>
-                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="30%">Location</th>
+                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="18%">Company</th>
+                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="44%">Role</th>
+                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="24%">Location</th>
+                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="14%">Posted</th>
                 </tr>
             </thead>
             <tbody>
 """
         if not jobs:
             html += """                <tr>
-                    <td colspan="3" style="padding: 6px; color: #aaa; font-style: italic; text-align: center;">No new listings found — checking again tomorrow</td>
+                    <td colspan="4" style="padding: 6px; color: #aaa; font-style: italic; text-align: center;">No new listings found — checking again tomorrow</td>
                 </tr>
 """
         else:
@@ -888,10 +901,12 @@ def build_hot_jobs_html(hot_jobs_by_category):
                     source_badge = '<span style="background: #f97316; color: white; padding: 1px 4px; border-radius: 4px; font-size: 8px; margin-left: 4px; vertical-align: middle;">BuiltIn</span>'
                 else:
                     source_badge = '<span style="background: #0077b5; color: white; padding: 1px 4px; border-radius: 4px; font-size: 8px; margin-left: 4px; vertical-align: middle;">LI</span>'
+                posted_date = job.get('posted_date', '')
                 html += f"""                <tr style="border-bottom: 1px solid #ecf0f1;">
                     <td style="padding: 4px 6px; font-weight: bold;">{job['company']}{source_badge}</td>
                     <td style="padding: 4px 6px;"><a href="{job['url']}" style="color: #e65100; text-decoration: underline;">{job['title']}</a></td>
                     <td style="padding: 4px 6px;"><span style="background: #fff3e0; padding: 1px 6px; border-radius: 8px; font-size: 9px;">{badge}</span> {job['location']}</td>
+                    <td style="padding: 4px 6px; color: #888; font-size: 9px;">{posted_date}</td>
                 </tr>
 """
         html += """            </tbody>
