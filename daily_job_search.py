@@ -574,14 +574,18 @@ def fetch_builtin_jobs(query):
             if job_url in seen:
                 continue
             seen.add(job_url)
-            # Verify actual location — skip non-France/Europe jobs
+            # Verify actual location — only accept France/Paris/Remote/EMEA
             actual_loc = fetch_builtin_job_location(job_url)
             loc_lower = actual_loc.lower()
-            # Reject if clearly non-European location
-            non_eu = ('india', 'bangalore', 'bengaluru', 'mumbai', 'hyderabad',
-                      'united states', 'canada', 'australia', 'singapore', 'dubai')
-            if any(x in loc_lower for x in non_eu):
-                print(f'  BuiltIn: skipping non-EU job at {actual_loc} — {job_url}')
+            allowed = (
+                'france', 'paris', 'remote', 'emea', 'europe',
+                'lyon', 'marseille', 'toulouse', 'bordeaux', 'lille',
+                'nantes', 'strasbourg', 'rennes', 'montpellier', 'nice',
+                'grenoble', 'sophia antipolis', 'courbevoie', 'puteaux',
+                'boulogne', 'levallois', 'issy', 'massy', 'saclay',
+            )
+            if actual_loc and not any(x in loc_lower for x in allowed):
+                print(f'  BuiltIn: skipping non-FR/EMEA job at {actual_loc} — {job_url}')
                 continue
             # Derive title from slug
             title_part = slug.replace('/job/', '').rsplit('/', 1)[0]
