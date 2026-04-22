@@ -584,13 +584,14 @@ def fetch_builtin_jobs(query):
                 'grenoble', 'sophia antipolis', 'courbevoie', 'puteaux',
                 'boulogne', 'levallois', 'issy', 'massy', 'saclay',
             )
-            if actual_loc and not any(x in loc_lower for x in allowed):
-                print(f'  BuiltIn: skipping non-FR/EMEA job at {actual_loc} — {job_url}')
+            # Skip if location unknown (empty) or not in allowed list
+            if not actual_loc or not any(x in loc_lower for x in allowed):
+                print(f'  BuiltIn: skipping job — location not FR/EMEA: "{actual_loc}" — {job_url}')
                 continue
             # Derive title from slug
             title_part = slug.replace('/job/', '').rsplit('/', 1)[0]
             title = title_part.replace('-', ' ').title()
-            location = actual_loc if actual_loc else 'France'
+            location = actual_loc
             jobs.append({
                 'company': '',
                 'title': title,
