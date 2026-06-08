@@ -222,17 +222,25 @@ Send personalised cold outreach emails directly to HR/Talent Acquisition contact
 python send_outreach_emails.py --name "Andrea Smith" --email "andrea@company.com" --company "Acme Corp"
 # Optional CC:
 python send_outreach_emails.py --name "Andrea Smith" --email "andrea@company.com" --company "Acme Corp" --cc "talent@company.com"
+# Optional explicit role (skips tracker lookup):
+python send_outreach_emails.py --name "Andrea Smith" --email "andrea@company.com" --company "Acme Corp" --role "Senior Backend Engineer"
 ```
 
 **How it works:**
-1. Looks up the applied role from your Excel tracker automatically
-2. Fills placeholders (`{first_name}`, `{company}`, `{role}`) in your template
+1. **Role resolution** (in priority order):
+   - `--role "..."` if you pass it explicitly, or
+   - the applied role looked up from your Excel tracker, or
+   - if the company isn't tracked → falls back to the **spontaneous template** (candidature spontanée — no specific open role)
+2. Fills placeholders (`{first_name}`, `{company}`, `{role}`) in the chosen template
 3. Shows a full preview of the email in the terminal
 4. Asks for yes/no confirmation before sending — nothing goes out without your approval
 5. Attaches your resume and portfolio PDFs
 
+> **Dead-link guard:** if the job posting URL returns 404 / is taken down, the role no longer exists — don't send the role-specific outreach; switch to the spontaneous template or skip (the `send-outreach` skill enforces this).
+
 **Templates** live in an `emailoutreach/` folder (local only, gitignored — personal content):
-- `cold_outreach_template.txt` — rich outreach with bullet points about your background (default for all HR contact)
+- `cold_outreach_template.txt` — rich outreach with bullet points about your background (default when a role is known)
+- `cold_outreach_spontaneous_template.txt` — candidature spontanée for companies with no tracked open role
 - `followup_template.txt` — short 3-line nudge (for second follow-up after no reply)
 
 **Setup — paths to configure in `send_outreach_emails.py`:**

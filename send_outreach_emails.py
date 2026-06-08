@@ -128,19 +128,28 @@ def main():
     parser.add_argument('--email',   required=True, help='HR contact email')
     parser.add_argument('--company', required=True, help='Company name')
     parser.add_argument('--cc',      default='',    help='CC email (optional)')
+    parser.add_argument('--role',    default='',    help='Override role (skips tracker lookup)')
     args = parser.parse_args()
 
     first_name = args.name.split()[0]
 
-    # Auto-detect role; always use cold outreach (Jinka-style) for first HR contact
-    role = find_role_in_tracker(args.company)
-    if role:
-        print(f"Found in tracker: {args.company} | {role}")
+    # Auto-detect role; use spontaneous template when no tracker match
+    if args.role:
+        role = args.role
+        print(f"Role override: {role}")
+        template_file = 'cold_outreach_template.txt'
+        print(f"Using cold outreach template")
     else:
-        role = args.company + ' opportunities'
-        print(f"Not in tracker: {args.company} -> role set to '{role}'")
-    template_file = 'cold_outreach_template.txt'
-    print(f"Using cold outreach template")
+        role = find_role_in_tracker(args.company)
+        if role:
+            print(f"Found in tracker: {args.company} | {role}")
+            template_file = 'cold_outreach_template.txt'
+            print(f"Using cold outreach template")
+        else:
+            role = ''
+            print(f"Not in tracker: {args.company} -> using spontaneous template")
+            template_file = 'cold_outreach_spontaneous_template.txt'
+            print(f"Using spontaneous template")
 
     template = load_template(template_file)
     filled   = fill_template(template, first_name, args.company, role)

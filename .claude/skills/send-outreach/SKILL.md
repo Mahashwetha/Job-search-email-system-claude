@@ -62,6 +62,7 @@ Add `--cc "[CC_EMAIL]"` if a CC was provided.
 - If the script errors on missing attachment, check that `resume/` folder has both PDFs
 - If template not found, check that `emailoutreach/cold_outreach_template.txt` exists
 - Do not hardcode HR contact details anywhere in code or skill files
+- **If the job listing URL returns 404 or any error (expired/taken down), do not send the outreach email** — the role no longer exists. Either switch to the spontaneous template or skip entirely and notify the user.
 
 ---
 
