@@ -52,6 +52,6 @@ Always show the Comments column (col F) if it has content — it often has usefu
 ## Rules
 - Always search BOTH sheets — Sheet1 and Rejected.
 - Skip header row (row 1) when iterating.
-- Company match is case-insensitive substring both ways: `query in company` OR `company in query`.
+- Company match is case-insensitive substring both ways: `query in company` OR `company in query`. **Skip empty cells** — empty string always matches any substring check, so guard with `if company` and `if url` before comparing.
 - For URL search, also check if the URL is wrapped in a HYPERLINK formula.
 - If the user gave a URL that's not in the tracker, always attempt to identify the company from the page before saying "not found".
