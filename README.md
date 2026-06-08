@@ -9,7 +9,7 @@ An end-to-end automated job search pipeline that handles everything from finding
 - **Daily Email Reports** - Styled HTML emails at 11:00 AM CET with companies grouped by role and status
 - **Hot Jobs Section** - Sticky listings from **LinkedIn + Welcome to the Jungle + BuiltIn** (fully configurable role categories, 5–8 slots per category) that persist until you add a company to your tracker, then backfill just that slot — 1 slot per category is always reserved for BuiltIn, with automatic fallback to WTTJ/LinkedIn if none found — each job shows a coloured source badge (🔵 LI / 🟢 WTTJ / 🟠 BuiltIn) — **WTTJ is prioritised first** within each location tier (hitsPerPage 30, source priority sort)
 - **Remote Job Scanner** - Fetches from RemoteOK, Remotive, We Work Remotely, Jobicy, LinkedIn (France/Global), and **Bluedoor** (free public ATS-aggregator API — Greenhouse/Lever/Ashby/Workday + 27 more) every 2 days, filters for EMEA-compatible roles. Bluedoor jobs are scoped to EMEA countries at the source, then **description-verified** (drops hard US-only roles, and annotates when a job's real scope is broader than its country tag, e.g. *"Tagged Poland → actually global remote"*)
-- **Fit Scoring** - Every digest job gets a Gemini-scored fit badge (Strong/Good/Moderate/Weak %) against your resume, shown inline in both the daily and remote emails
+- **Fit Scoring** - Daily **Hot Jobs** and **remote** listings get a Gemini-scored fit badge (Strong/Good/Moderate/Weak %) against your resume, shown inline in both emails. Scored in chunked batches (15/call) to avoid truncation; if Gemini is rate-limited the email still sends and the log warns clearly rather than silently shipping a blank column. Also available on-demand for any single posting via the `fit-check` skill.
 - **Resume Tailor** - Per-company tailored resumes using Gemini 2.5 Flash (free tier) — never fabricates, only reorders and surfaces existing skills
 - **Outreach Drafter** - Auto-generates short/medium/long LinkedIn message templates for each applied company
 - **HR Outreach Emails** - CLI script to send personalised cold outreach emails to HR contacts with resume + portfolio attached — auto-detects role from tracker, always previews before sending
@@ -342,6 +342,20 @@ HOT_JOB_TITLE_FILTERS = {
 
 **Note:** The LinkedIn guest API only returns card-level data (title, company, location, URL) — it does not read full job descriptions. Some irrelevant listings may appear; use `--remove` to blocklist them.
 
+## Fit Scoring & Fit Check
+
+Adds an AI **Fit %** badge — Strong / Good / Moderate / Weak — to jobs in the **daily Hot Jobs** section and the **remote** digest, scored against your resume with Gemini 2.5 Flash (free tier). *(Tracker/applied companies in the daily email are not scored — only fresh discoveries.)*
+
+**Two modes:**
+- **In digests (automatic):** one batched pass per email run, using only title + company (no extra HTTP fetches). Scored in **chunks of 15** to avoid output-token truncation; "thinking" is disabled so the JSON isn't cut off; transient `429/500/503` get a short retry.
+- **On-demand (`fit-check` skill / `fit_check.py`):** scores a single posting with the **full job description fetched** (LinkedIn / WTTJ / BuiltIn / generic ATS) for a deeper read — returns score, strengths, gaps, and a recommendation.
+
+```bash
+python fit_check.py "<job_url>" [--title "..."] [--company "..."]
+```
+
+**Graceful degradation:** if Gemini is rate-limited or quota-exhausted, the digest **still sends** — the Fit column is simply blank and the log prints a clear warning (`Fit scoring returned 0/N results …`) so it's never a silent failure. Toggle the whole feature with `FIT_SCORE_ENABLED` in `config.py`.
+
 ## Resume Tailor
 
 Automatically generates per-company tailored resumes using **Gemini 2.5 Flash** (free tier, $0 cost). Runs at the end of the daily pipeline, after outreach drafts.
@@ -450,7 +464,7 @@ Excel Tracker (List.xlsx)
             │       ├── LinkedIn France (remote f_WT=2 filter)
             │       ├── LinkedIn Global (EMEA description verification)
             │       ├── Bluedoor (ATS-aggregator API, EMEA-scoped + description-verified)
-            │       ├── fit_scorer.py ──→ Gemini fit badges (batched, thinking disabled)
+            │       ├── fit_scorer.py ──→ Gemini fit badges (chunked 15/call, thinking disabled, graceful on rate-limit)
             │       └── rejected_remote.json (filtered out before email/Excel)
             └── reject_remote.py ──→ CLI to manage rejected_remote.json
 ```
@@ -520,7 +534,7 @@ claude-job-agent/
 2. **Filter** - Matches role keywords + location-compatible positions (configurable in `config.py`)
 3. **Dedup** - Removes duplicates by company+title across sources
 4. **EMEA Verification** - For LinkedIn Global jobs, fetches each job's full description and checks for explicit EMEA timezone signals (`emea`, `cet`, `work from anywhere`, `any timezone`, etc.). Rejects US-only or no-timezone-info jobs. **Bluedoor** survivors get the same treatment via `?include=description` — hard US-only clauses are dropped, and a digest note flags when the true scope is broader than the country tag (e.g. *"Tagged Poland → actually global remote"*).
-5. **Fit Scoring** - One batched Gemini call scores every surviving job against your resume; badges render inline in the email.
+5. **Fit Scoring** - Chunked Gemini calls (15 jobs/call) score every surviving job against your resume; badges render inline. On rate-limit the email still sends and the log warns — it never silently ships a blank Fit column.
 6. **Excel Dump** - Appends new jobs to `remote_search/remote.xlsx` (append-only, never touches `List.xlsx`)
 7. **Send Email** - Styled HTML table sorted by location tier (Paris → France → EMEA → UK → Global), new jobs highlighted in green
 
