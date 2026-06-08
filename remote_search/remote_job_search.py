@@ -51,6 +51,14 @@ except ImportError:
     REMOTE_LOCATION_INCLUDE = None
     REMOTE_LOCATION_EXCLUDE = None
 
+# Bluedoor is an optional extra source (ATS-aggregated postings). Off in the
+# template (most users won't need it); defaults to True if the flag is absent so
+# existing configs keep working. Set BLUEDOOR_ENABLED = False in config.py to skip.
+try:
+    from config import BLUEDOOR_ENABLED
+except ImportError:
+    BLUEDOOR_ENABLED = True
+
 # ============= FILTERING CONFIG =============
 # Override these in config.py to customize for your profile and location
 
@@ -1158,7 +1166,10 @@ def main(no_save=False):
     all_jobs.extend(fetch_jobicy())
     all_jobs.extend(fetch_linkedin_france())
     all_jobs.extend(fetch_linkedin_global())
-    all_jobs.extend(fetch_bluedoor())
+    if BLUEDOOR_ENABLED:
+        all_jobs.extend(fetch_bluedoor())
+    else:
+        print("  Bluedoor: disabled (BLUEDOOR_ENABLED = False)")
     print(f"Total fetched: {len(all_jobs)}")
 
     # Enrich location info for vague "Remote" listings

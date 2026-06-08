@@ -566,6 +566,17 @@ REMOTE_LOCATION_EXCLUDE = ['us only', 'us timezone', 'americas only']
 
 If omitted, sensible defaults are used (see `config.template.py`).
 
+### Enable / Disable Bluedoor
+
+Bluedoor is an **optional** extra source (ATS-aggregated postings). It's off in the template since most users won't need it. Toggle it in `config.py`:
+
+```python
+BLUEDOOR_ENABLED = True   # include Bluedoor in the remote digest
+# BLUEDOOR_ENABLED = False # skip it (other sources unaffected)
+```
+
+> If the flag is omitted entirely, the code defaults to `True`. When disabled, the scanner simply skips the `fetch_bluedoor()` call — every other source and the fit scoring work exactly as before.
+
 ### Add More Companies
 
 **Simply add them to your Excel tracker!** The script automatically:
