@@ -4,6 +4,12 @@ config.py
 # HR contacts data (contains real names & LinkedIn URLs)
 update_hr_contacts.py
 
+# Weekly outreach digest — contains real recruiter names/emails (do not commit)
+send_weekly_digest.py
+
+# Local project memory (not for sharing)
+memory/
+
 # Resume files (NEVER commit actual resumes!)
 resume_nottoputongithub*
 resume/
