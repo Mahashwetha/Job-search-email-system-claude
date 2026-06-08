@@ -8,7 +8,8 @@ An end-to-end automated job search pipeline that handles everything from finding
 
 - **Daily Email Reports** - Styled HTML emails at 11:00 AM CET with companies grouped by role and status
 - **Hot Jobs Section** - Sticky listings from **LinkedIn + Welcome to the Jungle + BuiltIn** (fully configurable role categories, 5–8 slots per category) that persist until you add a company to your tracker, then backfill just that slot — 1 slot per category is always reserved for BuiltIn, with automatic fallback to WTTJ/LinkedIn if none found — each job shows a coloured source badge (🔵 LI / 🟢 WTTJ / 🟠 BuiltIn) — **WTTJ is prioritised first** within each location tier (hitsPerPage 30, source priority sort)
-- **Remote Job Scanner** - Fetches from RemoteOK, Remotive, and Arbeitnow APIs every 2 days, filters for EMEA-compatible roles
+- **Remote Job Scanner** - Fetches from RemoteOK, Remotive, We Work Remotely, Jobicy, LinkedIn (France/Global), and **Bluedoor** (free public ATS-aggregator API — Greenhouse/Lever/Ashby/Workday + 27 more) every 2 days, filters for EMEA-compatible roles. Bluedoor jobs are scoped to EMEA countries at the source, then **description-verified** (drops hard US-only roles, and annotates when a job's real scope is broader than its country tag, e.g. *"Tagged Poland → actually global remote"*)
+- **Fit Scoring** - Every digest job gets a Gemini-scored fit badge (Strong/Good/Moderate/Weak %) against your resume, shown inline in both the daily and remote emails
 - **Resume Tailor** - Per-company tailored resumes using Gemini 2.5 Flash (free tier) — never fabricates, only reorders and surfaces existing skills
 - **Outreach Drafter** - Auto-generates short/medium/long LinkedIn message templates for each applied company
 - **HR Outreach Emails** - CLI script to send personalised cold outreach emails to HR contacts with resume + portfolio attached — auto-detects role from tracker, always previews before sending
@@ -436,9 +437,11 @@ Excel Tracker (List.xlsx)
     └── remote_search/
             ├── remote_job_search.py ──→ HTML email + remote.xlsx append (every 2 days)
             │       │
-            │       ├── RemoteOK + Remotive + Arbeitnow + WWR + Jobicy APIs
+            │       ├── RemoteOK + Remotive + WWR + Jobicy APIs
             │       ├── LinkedIn France (remote f_WT=2 filter)
             │       ├── LinkedIn Global (EMEA description verification)
+            │       ├── Bluedoor (ATS-aggregator API, EMEA-scoped + description-verified)
+            │       ├── fit_scorer.py ──→ Gemini fit badges (batched, thinking disabled)
             │       └── rejected_remote.json (filtered out before email/Excel)
             └── reject_remote.py ──→ CLI to manage rejected_remote.json
 ```
@@ -501,12 +504,13 @@ claude-job-agent/
 6. **Resume Tailor** - Tailored DOCX resumes via Gemini AI for companies with fetchable job links
 
 ### Remote Job Scanner (every 2 days, 12:00 PM)
-1. **Fetch** - Pulls listings from RemoteOK, Remotive, Arbeitnow, WWR, Jobicy, LinkedIn France, and LinkedIn Global (India/Boston/NY)
-2. **EMEA Verification** - For LinkedIn Global jobs, fetches each job's full description and checks for explicit EMEA timezone signals (`emea`, `cet`, `work from anywhere`, `any timezone`, etc.). Rejects US-only or no-timezone-info jobs.
-3. **Filter** - Matches role keywords + location-compatible positions (configurable in `config.py`)
-4. **Dedup** - Removes duplicates by company+title across sources
-5. **Excel Dump** - Appends new jobs to `remote_search/remote.xlsx` (append-only, never touches `List.xlsx`)
-6. **Send Email** - Styled HTML table sorted by location tier (Paris → France → EMEA → UK → Global), new jobs highlighted in green
+1. **Fetch** - Pulls listings from RemoteOK, Remotive, WWR, Jobicy, LinkedIn France, LinkedIn Global (India/Boston/NY), and Bluedoor (EMEA countries, remote-only)
+2. **Filter** - Matches role keywords + location-compatible positions (configurable in `config.py`)
+3. **Dedup** - Removes duplicates by company+title across sources
+4. **EMEA Verification** - For LinkedIn Global jobs, fetches each job's full description and checks for explicit EMEA timezone signals (`emea`, `cet`, `work from anywhere`, `any timezone`, etc.). Rejects US-only or no-timezone-info jobs. **Bluedoor** survivors get the same treatment via `?include=description` — hard US-only clauses are dropped, and a digest note flags when the true scope is broader than the country tag (e.g. *"Tagged Poland → actually global remote"*).
+5. **Fit Scoring** - One batched Gemini call scores every surviving job against your resume; badges render inline in the email.
+6. **Excel Dump** - Appends new jobs to `remote_search/remote.xlsx` (append-only, never touches `List.xlsx`)
+7. **Send Email** - Styled HTML table sorted by location tier (Paris → France → EMEA → UK → Global), new jobs highlighted in green
 
 **Reject remote jobs** you've reviewed using `reject_remote.py` — entries are stored in `rejected_remote.json` and filtered out on every future run:
 ```bash

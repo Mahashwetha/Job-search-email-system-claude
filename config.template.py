@@ -36,9 +36,14 @@ USER_PROFILE = {
     'domain_expertise': 'software development',     # Short domain, e.g. "Java/fintech"
 }
 
-# Gemini API Key (free tier) — used by resume_tailor.py
+# Gemini API Key (free tier) — used by resume_tailor.py and fit_scorer.py
 # Get yours at: https://aistudio.google.com/apikey
 GOOGLE_API_KEY = 'your_gemini_api_key_here'
+
+# Fit scoring — adds a "Fit %" badge to every job in the daily and remote digests.
+# Uses one batched Gemini call per email run (title + company, no extra HTTP fetches).
+# Set to False to disable and remove the Fit column entirely.
+FIT_SCORE_ENABLED = True
 
 # Base resume DOCX path — the master copy that gets tailored per company
 BASE_RESUME_PATH = r'C:\Path\To\Your\base_resume.docx'
