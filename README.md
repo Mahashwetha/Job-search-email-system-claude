@@ -26,12 +26,12 @@ All data shown below is fictional.
 ### Daily Job Report (11:00 AM)
 ![Daily Email Sample](sample_daily_email.png)
 
-Companies grouped by status with clickable role links, HR contacts (purple), and quick search links. Platform aggregator links appear under each role category.
+Hot Jobs grouped by role category with clickable links, coloured source badges (🔵 LI / 🟢 WTTJ / 🟠 BuiltIn), and a **Fit %** badge per job scored against your resume. Below the Hot Jobs section, tracker companies are grouped by status with HR contacts and quick search links.
 
 ### Remote Job Scanner (every 2 days, 12:00 PM)
 ![Remote Email Sample](sample_remote_email.png)
 
-EMEA-compatible remote roles from RemoteOK, Remotive, and Arbeitnow APIs, filtered by your configured role keywords and location preferences.
+EMEA-compatible remote roles from RemoteOK, Remotive, WWR, Jobicy, LinkedIn (France/Global) and **Bluedoor**, sorted by location tier with a **Fit %** badge per job. Bluedoor jobs are EMEA description-verified — note the *"Tagged Poland → actually global remote"* annotation, which flags when a job's true scope is broader than its country tag so you don't have to open the link.
 
 ## What You Get
 
@@ -688,6 +688,10 @@ If you'd like to improve this project:
 - Never commit `update_hr_contacts.py` to Git (contains real recruiter names/LinkedIn URLs)
 - Keep your Gmail App Password secure
 - Don't share your Excel tracker if it contains private data
+
+## Acknowledgements
+
+- **[Bluedoor Job Postings API](https://bluedoor.sh/apis/job-postings)** — the remote scanner's ATS-aggregated source (Greenhouse, Lever, Ashby, Workday + 30 more; ~1.8M jobs across 60k+ companies, refreshed daily, free public API, no auth). Kindly suggested by its creator **Sam Crombie** ([LinkedIn](https://www.linkedin.com/in/samcrombie)) as a cleaner source for the digest — integrated as `fetch_bluedoor()` with EMEA scoping + description verification.
 
 ## License
 
