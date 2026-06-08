@@ -225,17 +225,14 @@ def _parse_fit_response(text):
         return None
 
 
-def score_fit_batch(items):
-    """Score a list of jobs in ONE Gemini call (title + company, no description fetch).
+# Max jobs per Gemini call. Smaller chunks avoid output-token truncation and
+# reduce the blast radius of a single failed/rate-limited request.
+_FIT_CHUNK_SIZE = 15
 
-    items: list of {'title': str, 'company': str}
-    Returns: list of fit dicts in same order (or list of None on full failure).
 
-    Each fit dict: {'score': int, 'verdict': str, 'strengths': str, 'gaps': str}
-    """
-    if not _FIT_SCORER_AVAILABLE or not FIT_SCORE_ENABLED or not items:
-        return [None] * len(items)
-
+def _score_fit_chunk(items):
+    """Score up to _FIT_CHUNK_SIZE jobs in ONE Gemini call. Returns a list of
+    fit dicts (same order) or a list of None on failure."""
     resume = _load_resume_text()
     job_lines = [
         f"{i + 1}. [{item.get('company', '?')}] {item['title']}"
@@ -261,7 +258,6 @@ Max 8 words each for strengths and gaps."""
 
     try:
         raw = _call_gemini(prompt)
-        # Extract JSON array from response
         arr_match = re.search(r'\[.*\]', raw, re.DOTALL)
         if not arr_match:
             return [None] * len(items)
@@ -269,8 +265,37 @@ Max 8 words each for strengths and gaps."""
         if isinstance(results, list) and len(results) == len(items):
             return results
     except Exception as e:
-        print(f'  Fit scorer batch error: {e}')
+        print(f'  Fit scorer chunk error: {e}')
     return [None] * len(items)
+
+
+def score_fit_batch(items):
+    """Score a list of jobs against the resume (title + company, no description fetch).
+
+    Splits into chunks of _FIT_CHUNK_SIZE to avoid output truncation, scores each
+    chunk in one Gemini call, and concatenates. Returns a list of fit dicts in the
+    same order (None for any job whose chunk failed).
+
+    Prints a clear warning if scoring fully or partially fails, so callers/logs
+    don't silently ship an empty Fit column.
+
+    Each fit dict: {'score': int, 'verdict': str, 'strengths': str, 'gaps': str}
+    """
+    if not _FIT_SCORER_AVAILABLE or not FIT_SCORE_ENABLED or not items:
+        return [None] * len(items)
+
+    results = []
+    for start in range(0, len(items), _FIT_CHUNK_SIZE):
+        results.extend(_score_fit_chunk(items[start:start + _FIT_CHUNK_SIZE]))
+
+    scored = sum(1 for r in results if r)
+    if scored == 0:
+        print(f'  WARNING: Fit scoring returned 0/{len(items)} results '
+              f'(likely Gemini quota/rate limit) — sending without badges.')
+    elif scored < len(results):
+        print(f'  WARNING: Fit scoring partial — {scored}/{len(results)} scored; '
+              f'the rest will show no badge.')
+    return results
 
 
 def score_fit_single(url, title, company=''):

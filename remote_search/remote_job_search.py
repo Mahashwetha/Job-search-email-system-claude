@@ -1196,7 +1196,8 @@ def main(no_save=False):
         fit_scores = score_fit_batch(items)
         for job, fit in zip(sorted_jobs, fit_scores):
             job['fit'] = fit
-        print(f"  Fit scores added")
+        scored = sum(1 for f in fit_scores if f)
+        print(f"  Fit scores added: {scored}/{len(sorted_jobs)}")
 
     # Compare with previous run to detect new jobs
     previous_keys = load_previous_jobs()
