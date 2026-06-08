@@ -45,6 +45,12 @@ GOOGLE_API_KEY = 'your_gemini_api_key_here'
 # Set to False to disable and remove the Fit column entirely.
 FIT_SCORE_ENABLED = True
 
+# Bluedoor — optional extra remote source (free public ATS-aggregator API:
+# Greenhouse/Lever/Ashby/Workday + 30 more). EMEA-scoped + description-verified.
+# Off by default since most users won't need it; set True to include it in the
+# remote digest. (If this line is omitted entirely, the code defaults to True.)
+BLUEDOOR_ENABLED = False
+
 # Base resume DOCX path — the master copy that gets tailored per company
 BASE_RESUME_PATH = r'C:\Path\To\Your\base_resume.docx'
 
