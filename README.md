@@ -2,7 +2,7 @@
 
 An end-to-end automated job search pipeline that handles everything from finding opportunities to preparing applications. Sends daily styled HTML email digests from your Excel tracker, scans remote job APIs for EMEA-compatible roles, tailors resumes per company using Gemini AI, sends HR outreach emails with attachments, and drafts LinkedIn outreach messages — all on autopilot via Windows Task Scheduler.
 
-**Heavily driven by Claude Code Skills** — 9 plain-language voice commands cover the entire workflow: adding jobs, rejecting, opening hot jobs, emailing HR, tailoring resumes, and more. No scripts to remember, no flags to type.
+**Heavily driven by Claude Code Skills** — 10 plain-language voice commands cover the entire workflow: adding jobs, rejecting, opening hot jobs, emailing HR, tailoring resumes, fit-checking a posting, and more. No scripts to remember, no flags to type.
 
 ## Features
 
@@ -17,7 +17,7 @@ An end-to-end automated job search pipeline that handles everything from finding
 - **HR Contact Management** - Maintains recruiter contacts with clickable LinkedIn hyperlinks
 - **Platform Aggregators** - Curated search links (Glassdoor, LinkedIn, WelcomeToTheJungle, etc.)
 - **Windows Automation** - Runs on autopilot via Task Scheduler
-- **Claude Code Skills (9)** - Plain-language commands for every step: add jobs, reject, open hot jobs, email HR, tailor resume, run search — no flags, no scripts to remember, just say what you want
+- **Claude Code Skills (10)** - Plain-language commands for every step: add jobs, reject, open hot jobs, email HR, tailor resume, fit-check a posting, run search — no flags, no scripts to remember, just say what you want
 
 ## Email Previews
 
@@ -391,7 +391,7 @@ python resume_tailor.py "https://company.workdayjobs.com/job/..." "Company Name"
 
 Skills are the **primary interface** for this project. Instead of remembering script names, paths, and flags, you just describe what you want in plain language — Claude picks the right skill and executes the full workflow.
 
-This project includes **9 skills** covering every stage of the job search:
+This project includes **10 skills** covering every stage of the job search:
 
 ### Tracker Management
 
@@ -416,6 +416,7 @@ This project includes **9 skills** covering every stage of the job search:
 | **send-outreach** | Sends a cold outreach email to an HR contact — test preview first, then real send | "send outreach to Andrea at Natixis" · "email HR at CFM" · "reach out to Mistral" |
 | **update-hr** | Searches LinkedIn for HR contacts at a company and adds them to the tracker | "find HR for BNP" · "add recruiter for Société Générale" |
 | **resume-tailor** | Fetches the job description and generates a tailored resume via Gemini AI | "tailor resume for Filigran" · "adapt my resume to this role" |
+| **fit-check** | Scores a single job posting against your resume (fetches the full JD) — returns score, strengths, gaps, and a recommendation | "fit-check &lt;url&gt;" · "is this a good fit?" · "score this job &lt;url&gt;" |
 
 ### Pipeline Control
 
@@ -462,9 +463,11 @@ claude-job-agent/
 ├── daily_hot_jobs.json                # Sticky hot jobs state (auto-generated, gitignored)
 ├── outreach_drafter.py                # LinkedIn outreach draft generator
 ├── resume_tailor.py                   # Per-company resume tailoring via Gemini AI
+├── fit_scorer.py                      # Gemini fit scoring (batch for digests + single for fit-check)
+├── fit_check.py                       # CLI: score one job posting against your resume
 ├── send_outreach_emails.py            # CLI: send cold outreach emails to HR with PDF attachments
 ├── remote_search/
-│   ├── remote_job_search.py           # Remote job API scanner (EMEA filter + Excel dump)
+│   ├── remote_job_search.py           # Remote job API scanner (EMEA filter + Bluedoor + fit + Excel dump)
 │   ├── reject_remote.py               # CLI to manage rejected jobs list
 │   ├── rejected_remote.json           # Reviewed & rejected (company, title) pairs
 │   ├── previous_jobs.json             # Last run's job keys for new-job detection (auto-generated)
@@ -498,7 +501,8 @@ claude-job-agent/
         ├── test-run/SKILL.md          # Auto-triggered: manually run daily or remote search
         ├── update-hr/SKILL.md         # Auto-triggered: find and add HR contacts
         ├── resume-tailor/SKILL.md     # Auto-triggered: tailor resume for a company
-        └── send-outreach/SKILL.md     # Auto-triggered: send cold outreach email to HR contact
+        ├── send-outreach/SKILL.md     # Auto-triggered: send cold outreach email to HR contact
+        └── fit-check/SKILL.md         # Auto-triggered: score one job posting vs your resume
 ```
 
 ## How It Works
