@@ -20,6 +20,13 @@ import json
 import requests
 import time
 
+try:
+    from fit_scorer import score_fit_batch, fit_badge_html, FIT_SCORE_ENABLED
+    _FIT_AVAILABLE = FIT_SCORE_ENABLED
+except ImportError:
+    _FIT_AVAILABLE = False
+    def fit_badge_html(_): return ''
+
 # ============= CONFIGURATION =============
 # Import configuration from config.py (create from config.template.py)
 try:
@@ -708,6 +715,7 @@ def fetch_hot_jobs(tracker):
     tracker_names = [name.lower().strip() for name in tracker.keys()]
 
     hot_jobs_by_category = {}
+    _source_counts = {'LinkedIn': 0, 'WTTJ': 0, 'BuiltIn': 0}
 
     # Global dedup: track URLs/keys already assigned to any category
     global_urls = set()
@@ -755,16 +763,20 @@ def fetch_hot_jobs(tracker):
             wttj_queried = set()
             builtin_queried = set()
             for keywords, location in query_list:
-                jobs = fetch_linkedin_jobs(keywords, location)
+                linkedin_jobs = fetch_linkedin_jobs(keywords, location)
+                _source_counts['LinkedIn'] += len(linkedin_jobs)
+                jobs = linkedin_jobs
                 loc_lower = location.lower()
                 if any(x in loc_lower for x in ('france', 'paris')) and keywords not in wttj_queried:
                     wttj_jobs = fetch_wttj_jobs(keywords)
+                    _source_counts['WTTJ'] += len(wttj_jobs)
                     print(f"    WTTJ '{keywords}': {len(wttj_jobs)} results")
                     jobs += wttj_jobs
                     wttj_queried.add(keywords)
                     time.sleep(1)
                 if any(x in loc_lower for x in ('france', 'paris')) and keywords not in builtin_queried:
                     builtin_jobs = fetch_builtin_jobs(keywords)
+                    _source_counts['BuiltIn'] += len(builtin_jobs)
                     if builtin_jobs:
                         print(f"    BuiltIn '{keywords}': {len(builtin_jobs)} results")
                         jobs += builtin_jobs
@@ -856,13 +868,16 @@ def fetch_hot_jobs(tracker):
     ordered = {cat: hot_jobs_by_category.get(cat, []) for cat in queries}
     save_hot_jobs_current(ordered)
 
-    return ordered
+    source_warnings = [
+        source for source, count in _source_counts.items() if count == 0
+    ]
+    return ordered, source_warnings
 
 
 TIER_BADGES = {0: '🏠 Paris', 1: '🇫🇷 France', 2: '🌍 EMEA', 3: '📍 Other'}
 
 
-def build_hot_jobs_html(hot_jobs_by_category):
+def build_hot_jobs_html(hot_jobs_by_category, source_warnings=None):
     """Build orange-themed HTML section for hot jobs."""
     if not hot_jobs_by_category:
         return ''
@@ -875,6 +890,14 @@ def build_hot_jobs_html(hot_jobs_by_category):
         </div>
 """
 
+    if source_warnings:
+        names = ', '.join(source_warnings)
+        html += f"""
+        <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 6px 10px; margin: 4px 0 8px 0; font-size: 11px; color: #856404;">
+            ⚠️ <strong>Scraping warning:</strong> {names} returned 0 results — source may be blocked or rate-limited. Results below may be incomplete.
+        </div>
+"""
+
     for category, jobs in hot_jobs_by_category.items():
         count = len(jobs)
         html += f"""
@@ -882,17 +905,18 @@ def build_hot_jobs_html(hot_jobs_by_category):
         <table style="border-collapse: collapse; width: 100%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.08); font-size: 11px; margin: 3px 0;">
             <thead>
                 <tr>
-                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="18%">Company</th>
-                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="44%">Role</th>
-                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="24%">Location</th>
-                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="14%">Posted</th>
+                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="16%">Company</th>
+                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="38%">Role</th>
+                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="22%">Location</th>
+                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="12%">Fit</th>
+                    <th style="background: linear-gradient(135deg, #e65100 0%, #ff9800 100%); color: white; font-weight: bold; padding: 4px 6px; text-align: left; font-size: 10px;" width="12%">Posted</th>
                 </tr>
             </thead>
             <tbody>
 """
         if not jobs:
             html += """                <tr>
-                    <td colspan="4" style="padding: 6px; color: #aaa; font-style: italic; text-align: center;">No new listings found — checking again tomorrow</td>
+                    <td colspan="5" style="padding: 6px; color: #aaa; font-style: italic; text-align: center;">No new listings found — checking again tomorrow</td>
                 </tr>
 """
         else:
@@ -907,10 +931,12 @@ def build_hot_jobs_html(hot_jobs_by_category):
                 else:
                     source_badge = '<span style="background: #0077b5; color: white; padding: 1px 4px; border-radius: 4px; font-size: 8px; margin-left: 4px; vertical-align: middle;">LI</span>'
                 posted_date = job.get('posted_date', '')
+                fit_html = fit_badge_html(job.get('fit'))
                 html += f"""                <tr style="border-bottom: 1px solid #ecf0f1;">
                     <td style="padding: 4px 6px; font-weight: bold;">{job['company']}{source_badge}</td>
                     <td style="padding: 4px 6px;"><a href="{job['url']}" style="color: #e65100; text-decoration: underline;">{job['title']}</a></td>
                     <td style="padding: 4px 6px;"><span style="background: #fff3e0; padding: 1px 6px; border-radius: 8px; font-size: 9px;">{badge}</span> {job['location']}</td>
+                    <td style="padding: 4px 6px;">{fit_html}</td>
                     <td style="padding: 4px 6px; color: #888; font-size: 9px;">{posted_date}</td>
                 </tr>
 """
@@ -927,10 +953,28 @@ def create_job_report():
 
     # Fetch hot jobs from LinkedIn (filtered against tracker + history)
     print("Fetching hot jobs from LinkedIn...")
-    hot_jobs_by_category = fetch_hot_jobs(tracker)
+    hot_jobs_by_category, source_warnings = fetch_hot_jobs(tracker)
     hot_jobs_total = sum(len(jobs) for jobs in hot_jobs_by_category.values())
     print(f"Hot jobs: {hot_jobs_total} listings across {len(hot_jobs_by_category)} categories")
-    hot_jobs_html = build_hot_jobs_html(hot_jobs_by_category)
+    if source_warnings:
+        print(f"  ⚠️  Sources with 0 results: {', '.join(source_warnings)}")
+
+    # Fit scoring — one batched Gemini call for all hot jobs
+    if _FIT_AVAILABLE and hot_jobs_total > 0:
+        print("Scoring job fit...")
+        all_items = [
+            {'title': j['title'], 'company': j['company']}
+            for jobs in hot_jobs_by_category.values() for j in jobs
+        ]
+        fit_scores = score_fit_batch(all_items)
+        idx = 0
+        for jobs in hot_jobs_by_category.values():
+            for job in jobs:
+                job['fit'] = fit_scores[idx]
+                idx += 1
+        print(f"  Fit scores added to {hot_jobs_total} hot jobs")
+
+    hot_jobs_html = build_hot_jobs_html(hot_jobs_by_category, source_warnings)
 
     # Merge tracker companies into COMPANIES_BY_ROLE
    # companies_merged = {}
@@ -1256,9 +1300,11 @@ def run_hot_jobs_only():
             print("Cleared all categories - will re-fetch\n")
         save_hot_jobs_current(current)
 
-    hot_jobs_by_category = fetch_hot_jobs(tracker)
+    hot_jobs_by_category, source_warnings = fetch_hot_jobs(tracker)
     total = sum(len(jobs) for jobs in hot_jobs_by_category.values())
 
+    if source_warnings:
+        print(f"⚠️  Sources with 0 results: {', '.join(source_warnings)}")
     if not hot_jobs_by_category:
         print("No hot jobs found.")
         return

@@ -3,7 +3,8 @@ Remote Job Search — fetches remote-only listings from free APIs/feeds,
 filters for EMEA-compatible roles matching user profile,
 and sends a styled HTML email every 2 days.
 
-Sources: RemoteOK, Remotive, Arbeitnow, We Work Remotely, Jobicy, LinkedIn (France)
+Sources: RemoteOK, Remotive, We Work Remotely, Jobicy, LinkedIn (France/Global),
+Bluedoor (ATS-aggregated postings, EMEA description-verified).
 """
 
 import sys
@@ -22,6 +23,15 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 from html import unescape
+
+# Fit scorer (optional — disabled gracefully if unavailable)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+try:
+    from fit_scorer import score_fit_batch, fit_badge_html, FIT_SCORE_ENABLED
+    _FIT_AVAILABLE = FIT_SCORE_ENABLED
+except ImportError:
+    _FIT_AVAILABLE = False
+    def fit_badge_html(_): return ''
 
 # Add parent directory to path so we can import config
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -510,6 +520,196 @@ def fetch_linkedin_global():
     return jobs
 
 
+# ============= BLUEDOOR (ATS-aggregated postings) =============
+# Free public API (no auth) aggregating Greenhouse/Lever/Ashby/Workday/+27 more.
+# Docs: https://bluedoor.sh/apis/job-postings/docs/
+BLUEDOOR_BASE = 'https://api.bluedoor.sh/job-postings/v1'
+
+# EMEA countries to pull remote jobs for — guarantees the role is workable from
+# the EMEA region (a remote role scoped to these countries is EMEA-compatible).
+BLUEDOOR_EMEA_COUNTRIES = [
+    'France', 'United Kingdom', 'Germany', 'Netherlands', 'Ireland',
+    'Spain', 'Portugal', 'Poland', 'Belgium', 'Sweden',
+]
+
+# Cache org_id -> company display name to avoid refetching the same org.
+_BLUEDOOR_ORG_CACHE = {}
+
+
+def _bluedoor_company_name(job):
+    """Resolve a company name for a bluedoor job (org display_name, cached;
+    falls back to parsing the apply/source URL host)."""
+    org_id = job.get('org_id')
+    if org_id and org_id in _BLUEDOOR_ORG_CACHE:
+        return _BLUEDOOR_ORG_CACHE[org_id]
+
+    name = ''
+    if org_id:
+        try:
+            resp = requests.get(f'{BLUEDOOR_BASE}/orgs/{org_id}',
+                                headers={'User-Agent': 'RemoteJobSearch/1.0'}, timeout=12)
+            if resp.ok:
+                data = resp.json().get('data', {})
+                name = (data.get('display_name') or data.get('canonical_name') or '').strip()
+        except Exception:
+            name = ''
+        _BLUEDOOR_ORG_CACHE[org_id] = name  # cache even empty to avoid retries
+
+    if not name:
+        # Fallback: derive from URL host subdomain (e.g. acme.bamboohr.com -> Acme)
+        url = job.get('apply_url') or job.get('source_url') or ''
+        m = re.search(r'https?://([^./]+)\.', url)
+        if m and m.group(1) not in ('www', 'jobs', 'boards', 'careers', 'apply'):
+            name = m.group(1).replace('-', ' ').title()
+    return name or 'Unknown'
+
+
+def fetch_bluedoor():
+    """Fetch EMEA-compatible remote jobs from the bluedoor public ATS API.
+
+    Pulls remote roles scoped to EMEA countries (so a remote job is workable
+    from the EMEA region), normalizes them to the standard job dict shape, and
+    lets the existing filter_jobs() apply role + US-exclusion screening on top.
+    """
+    from datetime import timedelta
+    jobs = []
+    posted_after = (datetime.now() - timedelta(days=45)).strftime('%Y-%m-%d')
+
+    for country in BLUEDOOR_EMEA_COUNTRIES:
+        cursor = None
+        for _page in range(2):  # up to 2 pages per country
+            try:
+                params = {
+                    'country': country,
+                    'workplace_type': 'remote',
+                    'active': 'true',
+                    'posted_after': posted_after,
+                    'limit': 100,
+                }
+                if cursor:
+                    params['cursor'] = cursor
+                resp = requests.get(f'{BLUEDOOR_BASE}/jobs/search', params=params,
+                                    headers={'User-Agent': 'RemoteJobSearch/1.0'}, timeout=20)
+                resp.raise_for_status()
+                payload = resp.json()
+            except Exception as e:
+                print(f"  Bluedoor error ({country}): {e}")
+                break
+
+            for item in payload.get('data', []):
+                # Build a real location string so filter_jobs geo screening still runs
+                loc_parts = [item.get('city'), item.get('region'), item.get('country')]
+                location = ', '.join(p for p in loc_parts if p) or 'Remote'
+                workplace = item.get('workplace_type') or item.get('remote_policy') or ''
+                posted = (item.get('source_posted_at') or item.get('first_seen_at') or '')[:10]
+                jobs.append({
+                    'company': _bluedoor_company_name(item),
+                    'title': item.get('title', ''),
+                    'url': item.get('apply_url') or item.get('source_url', ''),
+                    'source': 'Bluedoor',
+                    'location': location,
+                    'tags': ', '.join(t for t in [item.get('department'), workplace] if t),
+                    'posted_date': posted,
+                    '_bd_job_id': item.get('job_id'),   # for late EMEA verification
+                    '_bd_country': item.get('country') or '',
+                })
+
+            cursor = (payload.get('meta') or {}).get('next_cursor')
+            if not cursor:
+                break
+        time.sleep(0.3)  # be polite
+
+    print(f"  Bluedoor: {len(jobs)} EMEA remote jobs fetched")
+    return jobs
+
+
+# ── Bluedoor EMEA description verification ──
+# Bluedoor's structured `country` tag is loose (e.g. a "global remote" role can be
+# tagged with the company's HQ country). After role/geo filtering we fetch the real
+# job description for the few survivors and (a) drop hard non-EMEA roles, (b) note
+# when the true remote scope is broader than the country tag — surfaced in the digest.
+
+# Phrases meaning the role is genuinely open beyond its tagged country
+_BD_GLOBAL_SCOPE = [
+    'work from anywhere', 'anywhere in the world', 'fully distributed',
+    'globally remote', 'global remote', 'remote, global', 'work from any country',
+    'work remotely from anywhere', 'anywhere in the globe',
+]
+_BD_EMEA_SCOPE = [
+    'anywhere in europe', 'remote within europe', 'remote in europe',
+    'europe-based', 'based anywhere in europe', 'eu remote', 'emea',
+    'european time zone', 'cet timezone', 'cet time zone', 'within the eu',
+]
+# Hard residency clauses that make a role NOT workable from EMEA → drop
+_BD_HARD_NON_EMEA = [
+    'must be based in the united states', 'must reside in the united states',
+    'us residents only', 'must be located in the united states',
+    'must be a us citizen', 'us work authorization required',
+    'us-based candidates only', 'within the united states only',
+    'based in the united states only', 'must be based in the us',
+    'must be located in canada', 'canada residents only',
+    'must be based in india', 'latam only',
+]
+
+
+def _bluedoor_verify(job):
+    """Fetch a kept Bluedoor job's description and decide keep/drop + annotate.
+
+    Returns True to keep, False to drop. Drops only on an explicit hard non-EMEA
+    residency clause. Sets job['location_note'] when the real remote scope is
+    broader than the country tag. On any fetch failure, keeps the job (no note).
+    """
+    jid = job.get('_bd_job_id')
+    if not jid:
+        return True
+    try:
+        resp = requests.get(f'{BLUEDOOR_BASE}/jobs/{jid}', params={'include': 'description'},
+                            headers={'User-Agent': 'RemoteJobSearch/1.0'}, timeout=15)
+        resp.raise_for_status()
+        desc = (resp.json().get('data', {}).get('description_text') or '').lower()
+    except Exception as e:
+        print(f"  Bluedoor verify error ({job.get('company','?')}): {e}")
+        return True  # never silently drop on fetch failure
+    if not desc:
+        return True
+
+    # (a) hard exclusion — not workable from EMEA
+    for clause in _BD_HARD_NON_EMEA:
+        if clause in desc:
+            print(f"  Bluedoor DROP (non-EMEA): {job['company']} — '{clause}'")
+            return False
+
+    # (b) note when true scope is broader than a single-country tag
+    tag = (job.get('_bd_country') or '').strip()
+    scope = ''
+    if any(p in desc for p in _BD_GLOBAL_SCOPE):
+        scope = 'global remote'
+    elif any(p in desc for p in _BD_EMEA_SCOPE):
+        scope = 'Europe/EMEA remote'
+    if scope and tag and tag.lower() not in ('', 'remote') and scope.split()[0] not in tag.lower():
+        job['location_note'] = f"Tagged {tag} -> actually {scope}"
+    return True
+
+
+def verify_bluedoor_jobs(jobs):
+    """Run EMEA description verification on kept Bluedoor jobs only (cheap: small set)."""
+    bd = [j for j in jobs if j.get('source') == 'Bluedoor']
+    if not bd:
+        return jobs
+    out, dropped, noted = [], 0, 0
+    for job in jobs:
+        if job.get('source') == 'Bluedoor':
+            if not _bluedoor_verify(job):
+                dropped += 1
+                continue
+            if job.get('location_note'):
+                noted += 1
+            time.sleep(0.2)  # be polite
+        out.append(job)
+    print(f"  Bluedoor verify: checked {len(bd)}, dropped {dropped}, annotated {noted}")
+    return out
+
+
 # Known EMEA tech companies → country (for enriching "Remote" listings)
 KNOWN_COMPANY_COUNTRIES = {
     'tines': 'Ireland', 'intercom': 'Ireland', 'stripe': 'Ireland/US',
@@ -780,12 +980,15 @@ def dump_to_excel(jobs):
             if key in existing_keys:
                 continue
             new_flag = 'NEW' if job.get('is_new') else ''
+            location_cell = job['location']
+            if job.get('location_note'):
+                location_cell = f"{location_cell} ({job['location_note']})"
             ws.append([
                 _safe_str(job['company']),
                 _safe_str(job['title']),
                 job['url'],
                 _safe_str(job['source']),
-                _safe_str(job['location']),
+                _safe_str(location_cell),
                 _safe_str(job['tags']),
                 _safe_str(job['posted_date']),
                 new_flag,
@@ -842,25 +1045,30 @@ def build_html(jobs, new_count=0, total_unchanged=False):
         if tier != current_tier:
             current_tier = tier
             label = TIER_LABELS.get(tier, 'Other')
-            rows_html += f'                <tr style="background:#e8f5e9;font-weight:bold;"><td colspan="5" style="padding:4px 6px;font-size:11px;color:#2c3e50;">📍 {label}</td></tr>\n'
+            rows_html += f'                <tr style="background:#e8f5e9;font-weight:bold;"><td colspan="6" style="padding:4px 6px;font-size:11px;color:#2c3e50;">📍 {label}</td></tr>\n'
 
         is_new = job.get('is_new', False)
         row_style = ' style="background:#d4edda;"' if is_new else ''
         new_badge = ' <span style="background:#28a745;color:white;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:bold;">NEW</span>' if is_new else ''
 
+        note_html = ''
+        if job.get('location_note'):
+            note_html = f'<br><span style="font-size:9px;color:#e67e22;font-weight:bold;">✅ {job["location_note"]}</span>'
+
         rows_html += f"""                <tr{row_style}>
                     <td><strong>{job['company']}</strong>{new_badge}</td>
                     <td><a href="{job['url']}" style="color: #3498db; text-decoration: underline;">{job['title']}</a></td>
                     <td>{job['source']}</td>
-                    <td>{job['location']}<br><span style="font-size:9px;color:#7f8c8d;">{job['tags']}</span></td>
+                    <td>{job['location']}{note_html}<br><span style="font-size:9px;color:#7f8c8d;">{job['tags']}</span></td>
+                    <td>{fit_badge_html(job.get('fit'))}</td>
                     <td>{job['posted_date']}</td>
                 </tr>
 """
 
     if not jobs:
-        rows_html = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#7f8c8d;">No matching remote roles found this run.</td></tr>\n'
+        rows_html = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#7f8c8d;">No matching remote roles found this run.</td></tr>\n'
 
-    sources = 'RemoteOK, Remotive, WWR, Jobicy, LinkedIn FR, LinkedIn Global'
+    sources = 'RemoteOK, Remotive, WWR, Jobicy, LinkedIn FR, LinkedIn Global, Bluedoor'
     html = f"""
     <html>
     <head>
@@ -888,10 +1096,11 @@ def build_html(jobs, new_count=0, total_unchanged=False):
         <table>
             <thead>
                 <tr>
-                    <th width="18%">Company</th>
-                    <th width="30%">Role</th>
-                    <th width="10%">Source</th>
-                    <th width="27%">Location / Tags</th>
+                    <th width="16%">Company</th>
+                    <th width="26%">Role</th>
+                    <th width="9%">Source</th>
+                    <th width="23%">Location / Tags</th>
+                    <th width="11%">Fit</th>
                     <th width="15%">Posted</th>
                 </tr>
             </thead>
@@ -949,6 +1158,7 @@ def main(no_save=False):
     all_jobs.extend(fetch_jobicy())
     all_jobs.extend(fetch_linkedin_france())
     all_jobs.extend(fetch_linkedin_global())
+    all_jobs.extend(fetch_bluedoor())
     print(f"Total fetched: {len(all_jobs)}")
 
     # Enrich location info for vague "Remote" listings
@@ -961,8 +1171,21 @@ def main(no_save=False):
     deduped = dedup_jobs(filtered)
     print(f"After dedup: {len(deduped)}")
 
+    # Verify Bluedoor survivors against their real descriptions (EMEA + scope note)
+    deduped = verify_bluedoor_jobs(deduped)
+    print(f"After Bluedoor EMEA verify: {len(deduped)}")
+
     # Sort: Paris → France → EMEA/CET → UK → Global, remote-first within tier
     sorted_jobs = sort_jobs(deduped)
+
+    # Fit scoring — one batched Gemini call for all remote jobs
+    if _FIT_AVAILABLE and sorted_jobs:
+        print(f"Scoring job fit for {len(sorted_jobs)} remote jobs...")
+        items = [{'title': j['title'], 'company': j['company']} for j in sorted_jobs]
+        fit_scores = score_fit_batch(items)
+        for job, fit in zip(sorted_jobs, fit_scores):
+            job['fit'] = fit
+        print(f"  Fit scores added")
 
     # Compare with previous run to detect new jobs
     previous_keys = load_previous_jobs()
