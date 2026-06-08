@@ -972,7 +972,8 @@ def create_job_report():
             for job in jobs:
                 job['fit'] = fit_scores[idx]
                 idx += 1
-        print(f"  Fit scores added to {hot_jobs_total} hot jobs")
+        scored = sum(1 for f in fit_scores if f)
+        print(f"  Fit scores added to {scored}/{hot_jobs_total} hot jobs")
 
     hot_jobs_html = build_hot_jobs_html(hot_jobs_by_category, source_warnings)
 
