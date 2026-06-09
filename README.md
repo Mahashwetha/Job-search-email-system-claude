@@ -533,7 +533,11 @@ claude-job-agent/
 1. **Fetch** - Pulls listings from RemoteOK, Remotive, WWR, Jobicy, LinkedIn France, LinkedIn Global (India/Boston/NY), and Bluedoor (EMEA countries, remote-only)
 2. **Filter** - Matches role keywords + location-compatible positions (configurable in `config.py`)
 3. **Dedup** - Removes duplicates by company+title across sources
-4. **EMEA Verification** - For LinkedIn Global jobs, fetches each job's full description and checks for explicit EMEA timezone signals (`emea`, `cet`, `work from anywhere`, `any timezone`, etc.). Rejects US-only or no-timezone-info jobs. **Bluedoor** survivors get the same treatment via `?include=description` — hard US-only clauses are dropped, and a digest note flags when the true scope is broader than the country tag (e.g. *"Tagged Poland → actually global remote"*).
+4. **EMEA Verification** - For LinkedIn Global jobs, fetches each job's full description and checks for explicit EMEA timezone signals (`emea`, `cet`, `work from anywhere`, `any timezone`, etc.). Rejects US-only or no-timezone-info jobs. **Bluedoor** survivors get the same treatment via `?include=description`, then each is classified by *real* workable scope (broad/home signals always win, so EMEA-workable roles are never lost):
+   - 🌍 **Global remote** / 🇪🇺 **EU-EMEA remote** → kept and labelled (e.g. *"Tagged Poland → actually global remote"*)
+   - ❌ **Hard country-locked** (e.g. `BVG` transit pass, local pension, *"must be based in &lt;country&gt;"*) with **no** EMEA/EU/global signal → dropped (toggle via `BLUEDOOR_DROP_COUNTRY_LOCKED`)
+   - ⚠️ **Country-tagged, unclear** → kept but flagged *"&lt;Country&gt;-based — verify remote eligibility"* so you can triage without clicking
+   - Hard US-only clauses → dropped outright
 5. **Fit Scoring** - Chunked Gemini calls (15 jobs/call) score every surviving job against your resume; badges render inline. On rate-limit the email still sends and the log warns — it never silently ships a blank Fit column.
 6. **Excel Dump** - Appends new jobs to `remote_search/remote.xlsx` (append-only, never touches `List.xlsx`)
 7. **Send Email** - Styled HTML table sorted by location tier (Paris → France → EMEA → UK → Global), new jobs highlighted in green
@@ -594,6 +598,15 @@ BLUEDOOR_ENABLED = True   # include Bluedoor in the remote digest
 ```
 
 > If the flag is omitted entirely, the code defaults to `True`. When disabled, the scanner simply skips the `fetch_bluedoor()` call — every other source and the fit scoring work exactly as before.
+
+**Location handling** (two more optional flags):
+
+```python
+BLUEDOOR_HOME_COUNTRY = 'France'        # jobs scoped here are kept as locally workable
+BLUEDOOR_DROP_COUNTRY_LOCKED = True     # drop hard single-country-locked roles
+```
+
+`BLUEDOOR_DROP_COUNTRY_LOCKED` drops only roles **hard-locked** to a single non-home country (local transit pass, local pension, *"must be based in &lt;country&gt;"*) **that show no EMEA/EU/global signal**. Broad and home signals always win, so genuinely EMEA-workable roles are never dropped — they're labelled instead. Set to `False` to keep everything and rely on the labels alone.
 
 ### Add More Companies
 
