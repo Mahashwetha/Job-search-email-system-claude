@@ -51,6 +51,16 @@ FIT_SCORE_ENABLED = True
 # remote digest. (If this line is omitted entirely, the code defaults to True.)
 BLUEDOOR_ENABLED = False
 
+# Bluedoor location handling:
+#  - BLUEDOOR_HOME_COUNTRY: your country; jobs scoped here are kept as locally workable.
+#  - BLUEDOOR_DROP_COUNTRY_LOCKED: drop roles HARD-locked to a single non-home
+#    country (e.g. local transit pass / "must be based in X") that show NO
+#    EMEA/EU/global signal. Broad/home signals always win, so genuinely
+#    EMEA-workable roles are never dropped — they're labelled instead
+#    (🌍 Global / 🇪🇺 EU-EMEA / ⚠️ Country-based — verify).
+BLUEDOOR_HOME_COUNTRY = 'France'
+BLUEDOOR_DROP_COUNTRY_LOCKED = True
+
 # Base resume DOCX path — the master copy that gets tailored per company
 BASE_RESUME_PATH = r'C:\Path\To\Your\base_resume.docx'
 

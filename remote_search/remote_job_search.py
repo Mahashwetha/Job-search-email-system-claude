@@ -59,6 +59,20 @@ try:
 except ImportError:
     BLUEDOOR_ENABLED = True
 
+# Drop Bluedoor jobs that are HARD-locked to a single non-home country (e.g.
+# "BVG ticket", "must be based in <country>") AND show no EMEA/EU/global signal.
+# Broad/home signals always win, so genuinely EMEA-workable roles are never lost.
+try:
+    from config import BLUEDOOR_DROP_COUNTRY_LOCKED
+except ImportError:
+    BLUEDOOR_DROP_COUNTRY_LOCKED = True
+
+# Your home country (jobs scoped here are treated as locally workable).
+try:
+    from config import BLUEDOOR_HOME_COUNTRY
+except ImportError:
+    BLUEDOOR_HOME_COUNTRY = 'France'
+
 # ============= FILTERING CONFIG =============
 # Override these in config.py to customize for your profile and location
 
@@ -637,16 +651,21 @@ def fetch_bluedoor():
 # job description for the few survivors and (a) drop hard non-EMEA roles, (b) note
 # when the true remote scope is broader than the country tag — surfaced in the digest.
 
-# Phrases meaning the role is genuinely open beyond its tagged country
+# Phrases meaning the role is genuinely borderless (workable from anywhere)
 _BD_GLOBAL_SCOPE = [
     'work from anywhere', 'anywhere in the world', 'fully distributed',
     'globally remote', 'global remote', 'remote, global', 'work from any country',
-    'work remotely from anywhere', 'anywhere in the globe',
+    'work remotely from anywhere', 'anywhere in the globe', 'remote worldwide',
+    'fully remote, anywhere',
 ]
+# Phrases meaning the role is EU/EMEA-wide (workable from France/EMEA)
 _BD_EMEA_SCOPE = [
     'anywhere in europe', 'remote within europe', 'remote in europe',
     'europe-based', 'based anywhere in europe', 'eu remote', 'emea',
     'european time zone', 'cet timezone', 'cet time zone', 'within the eu',
+    'across europe', 'europe-wide', 'pan-european', 'eu-based', 'anywhere in the eu',
+    ' eu ', '- eu', '(eu', 'eu)', 'european union', 'cet', 'cest',
+    'central european time', 'europe', 'european',
 ]
 # Hard residency clauses that make a role NOT workable from EMEA → drop
 _BD_HARD_NON_EMEA = [
@@ -658,14 +677,25 @@ _BD_HARD_NON_EMEA = [
     'must be located in canada', 'canada residents only',
     'must be based in india', 'latam only',
 ]
+# STRONG single-country lock signals. Only used to drop when NO broad/home signal
+# is present, so an EMEA/EU/global role is never dropped because of these.
+_BD_HARD_LOCK = [
+    'bvg', 'betriebsrat', 'works council', 'deutschland ticket', 'jobticket',
+    'must be based in', 'must reside in', 'must be located in', 'must live in',
+    'work permit for', 'relocation to', 'onsite only', 'on-site only',
+    'fully on-site', 'fully onsite', '5 days a week in the office',
+]
 
 
 def _bluedoor_verify(job):
-    """Fetch a kept Bluedoor job's description and decide keep/drop + annotate.
+    """Fetch a kept Bluedoor job's description, decide keep/drop, and label scope.
 
-    Returns True to keep, False to drop. Drops only on an explicit hard non-EMEA
-    residency clause. Sets job['location_note'] when the real remote scope is
-    broader than the country tag. On any fetch failure, keeps the job (no note).
+    Keep/drop priority (broad/home ALWAYS win, so good EMEA roles are never lost):
+      1. Hard non-EMEA (US/Canada/etc.) clause          -> DROP
+      2. Global / EU-EMEA / home-country signal          -> KEEP (+ scope label)
+      3. Hard single-country lock, no broad signal       -> DROP (if flag on)
+      4. Country-tagged, no signal either way            -> KEEP (+ "verify" flag)
+    On any fetch failure, keep the job (never silently drop).
     """
     jid = job.get('_bd_job_id')
     if not jid:
@@ -681,21 +711,44 @@ def _bluedoor_verify(job):
     if not desc:
         return True
 
-    # (a) hard exclusion — not workable from EMEA
+    text = f"{job.get('title','').lower()} {desc}"
+    tag = (job.get('_bd_country') or '').strip()
+    home = BLUEDOOR_HOME_COUNTRY.lower()
+
+    # 1. hard non-EMEA → drop
     for clause in _BD_HARD_NON_EMEA:
         if clause in desc:
             print(f"  Bluedoor DROP (non-EMEA): {job['company']} — '{clause}'")
             return False
 
-    # (b) note when true scope is broader than a single-country tag
-    tag = (job.get('_bd_country') or '').strip()
-    scope = ''
-    if any(p in desc for p in _BD_GLOBAL_SCOPE):
-        scope = 'global remote'
-    elif any(p in desc for p in _BD_EMEA_SCOPE):
-        scope = 'Europe/EMEA remote'
-    if scope and tag and tag.lower() not in ('', 'remote') and scope.split()[0] not in tag.lower():
-        job['location_note'] = f"Tagged {tag} -> actually {scope}"
+    # 2. broad / home signals (these ALWAYS keep the job)
+    is_home   = home in job['location'].lower() or home in text or 'paris' in job['location'].lower()
+    is_global = any(p in text for p in _BD_GLOBAL_SCOPE)
+    is_emea   = any(p in text for p in _BD_EMEA_SCOPE)
+
+    if is_global:
+        if tag and 'global' not in tag.lower() and home not in tag.lower():
+            job['location_note'] = f"🌍 Global remote (tagged {tag})"
+        else:
+            job['location_note'] = "🌍 Global remote (per JD)"
+        return True
+    if is_emea:
+        job['location_note'] = f"🇪🇺 EU/EMEA remote{f' (tagged {tag})' if tag and home not in tag.lower() else ''}"
+        return True
+    if is_home:
+        return True  # location already shows the home country
+
+    # 3. hard single-country lock with no broad signal → drop
+    if BLUEDOOR_DROP_COUNTRY_LOCKED:
+        for clause in _BD_HARD_LOCK:
+            if clause in desc:
+                print(f"  Bluedoor DROP (country-locked, no EMEA signal): "
+                      f"{job['company']} [{tag}] — '{clause}'")
+                return False
+
+    # 4. country-tagged, no clear signal → keep but flag for manual check
+    if tag and home not in tag.lower():
+        job['location_note'] = f"⚠️ {tag}-based — verify remote eligibility"
     return True
 
 
@@ -1061,7 +1114,7 @@ def build_html(jobs, new_count=0, total_unchanged=False):
 
         note_html = ''
         if job.get('location_note'):
-            note_html = f'<br><span style="font-size:9px;color:#e67e22;font-weight:bold;">✅ {job["location_note"]}</span>'
+            note_html = f'<br><span style="font-size:9px;color:#e67e22;font-weight:bold;">{job["location_note"]}</span>'
 
         rows_html += f"""                <tr{row_style}>
                     <td><strong>{job['company']}</strong>{new_badge}</td>
