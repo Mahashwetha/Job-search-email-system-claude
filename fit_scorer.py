@@ -29,7 +29,7 @@ try:
 except (ImportError, AttributeError):
     FIT_SCORE_ENABLED = True
 
-GEMINI_MODEL = 'gemini-2.5-flash'
+GEMINI_MODEL = 'gemini-2.5-flash-lite'
 GEMINI_URL = (
     f'https://generativelanguage.googleapis.com/v1beta/models/'
     f'{GEMINI_MODEL}:generateContent'
@@ -178,11 +178,14 @@ def _fetch_wttj(url):
 
 def _fetch_generic(url):
     try:
+        # Some sites (e.g. workatastartup.com) return 406 without Accept headers
         headers = {
             'User-Agent': (
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                 'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            )
+            ),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
         }
         resp = requests.get(url, headers=headers, timeout=15)
         if resp.status_code != 200:
@@ -200,7 +203,16 @@ def _fetch_generic(url):
                 pass
         for tag in soup(['script', 'style', 'nav', 'footer', 'header']):
             tag.decompose()
-        return soup.get_text(' ', strip=True)[:4000]
+        text = soup.get_text(' ', strip=True)
+        # JS-rendered shells (e.g. workatastartup.com) leave almost no visible
+        # text but often ship the full JD in the meta description
+        if len(text) < 500:
+            meta = (soup.find('meta', attrs={'name': 'description'})
+                    or soup.find('meta', attrs={'property': 'og:description'}))
+            content = meta.get('content', '') if meta else ''
+            if len(content) > len(text):
+                text = content
+        return text[:4000]
     except Exception:
         return ''
 
