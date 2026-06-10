@@ -9,7 +9,7 @@ Daily Job Search Agent - ULTRA COMPACT VERSION
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import unescape
 import openpyxl
 import re
@@ -351,10 +351,11 @@ DEFAULT_HOT_JOB_QUERIES = {
         ('tech+lead+java', 'France'),
         ('lead+java+developer', 'Paris, France'),
     ],
-    'Product Owner': [
-        ('product+owner', 'Paris, France'),
-        ('product+owner', 'France'),
-    ],
+    # TEMPORARILY DISABLED — results not relevant, re-enable when PO roles improve
+    # 'Product Owner': [
+    #     ('product+owner', 'Paris, France'),
+    #     ('product+owner', 'France'),
+    # ],
     'Assistant Project Manager': [
         ('assistant+project+manager+java', 'Paris, France'),
         ('assistant+project+manager+java', 'France'),
@@ -401,7 +402,7 @@ _JAVA_OOP_ENGLISH = ['java', 'kotlin', 'object oriented', 'orienté objet', 'eng
 HOT_JOB_TITLE_FILTERS = {
     'Senior Java': ['senior', 'engineer', 'developer', 'développeur', 'architect'] + _JAVA_OOP_ENGLISH,
     'Backend Java': ['backend', 'back-end', 'back end', 'engineer', 'developer', 'développeur'] + _JAVA_OOP_ENGLISH,
-    'Product Owner': ['product owner', 'product manager', 'chef de produit'],
+    # 'Product Owner': ['product owner', 'product manager', 'chef de produit'],  # TEMPORARILY DISABLED
     'Assistant Project Manager': ['java', 'software', ' it ', ' si ', 'informatique', 'digital',
                                   'data', 'développeur', 'developer', 'système d\'information',
                                   'web', 'cloud', 'devops', 'cyber'],
@@ -414,7 +415,7 @@ HOT_JOB_TITLE_FILTERS = {
 # These categories require the job *description* to contain at least one of these keywords.
 # Title is NOT checked for these — only the fetched description.
 HOT_JOB_DESC_REQUIRED = {
-    'Product Owner': _JAVA_OOP_ENGLISH,
+    # 'Product Owner': _JAVA_OOP_ENGLISH,  # TEMPORARILY DISABLED
     'Assistant Project Manager': _JAVA_OOP_ENGLISH,
     'Tech Lead / Lead Developer': _JAVA_OOP_ENGLISH,
     'AI / GenAI Engineer': ['genai', 'gen ai', 'llm', 'generative ai', 'large language', 'openai', 'anthropic', 'mistral', 'ai engineer'],
@@ -734,6 +735,7 @@ def fetch_hot_jobs(tracker):
         existing = current.get(category, [])
 
         # Remove jobs whose company is now in the tracker, or match global exclusions
+        _cutoff = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
         kept = []
         for job in existing:
             title_lower = job['title'].lower()
@@ -743,6 +745,14 @@ def fetch_hot_jobs(tracker):
                 global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
             elif any(kw in title_lower for kw in ('stage', 'alternance', 'alternant', 'internship', 'intern')):
                 print(f"  [{category}] Removed '{job['company']}' (excluded title keyword)")
+                global_urls.discard(job['url'])
+                global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
+            elif _is_blocklisted(job['company'].lower().strip(), job['title'].lower().strip(), blocklist):
+                print(f"  [{category}] Removed '{job['company']}' (blocklisted)")
+                global_urls.discard(job['url'])
+                global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
+            elif job.get('posted_date', '9999') < _cutoff:
+                print(f"  [{category}] Removed '{job['company']}' (posted {job.get('posted_date')} — older than 90 days)")
                 global_urls.discard(job['url'])
                 global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
             else:
@@ -801,6 +811,8 @@ def fetch_hot_jobs(tracker):
                     if title_filter:
                         if not any(kw in title_lower for kw in title_filter):
                             continue
+                    if job.get('posted_date', '9999') < _cutoff:
+                        continue
                     existing_urls.add(job['url'])
                     existing_keys.add(key)
                     candidates.append(job)
