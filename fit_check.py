@@ -75,7 +75,7 @@ def main():
     colour = _colours.get(verdict, '')
 
     print(f'  Score:          {colour}{score}% — {verdict}{reset}')
-    print(f'  Description:    {"fetched ✓" if has_desc else "not available — title-only estimate"}')
+    print(f'  Description:    {"fetched (ok)" if has_desc else "not available - title-only estimate"}')
     print()
     print(f'  Strengths:')
     for line in result.get('strengths', '').split('. '):
