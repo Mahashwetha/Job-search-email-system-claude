@@ -20,7 +20,7 @@ import xml.etree.ElementTree as ET
 import openpyxl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 from html import unescape
 
@@ -154,6 +154,9 @@ LOCATION_PRIORITY = [
     (['uk', 'united kingdom', 'london', 'britain'], 3),
     # Tier 4: Worldwide/anywhere/global
     (['worldwide', 'anywhere', 'global'], 4),
+    # Tier 5: India (IST overlaps CET ~4.5h — viable with async-friendly or flexible-hour roles)
+    (['india', 'bangalore', 'bengaluru', 'hyderabad', 'mumbai', 'pune',
+      'chennai', 'delhi', 'noida', 'gurgaon', 'gurugram'], 5),
 ]
 
 LOCATION_INCLUDE = REMOTE_LOCATION_INCLUDE or [
@@ -166,6 +169,9 @@ LOCATION_INCLUDE = REMOTE_LOCATION_INCLUDE or [
     'luxembourg', 'berlin', 'amsterdam', 'barcelona', 'munich',
     'dublin', 'lisbon', 'warsaw', 'prague', 'vienna', 'brussels',
     'gmt', 'cet', 'cest', 'central european', 'utc+1', 'utc+2',
+    # Indian cities — for IST-overlap roles (tier 5, sorted last)
+    'india', 'bangalore', 'bengaluru', 'hyderabad', 'mumbai', 'pune',
+    'chennai', 'delhi', 'noida', 'gurgaon', 'gurugram',
     # Note: bare 'remote' excluded to avoid US-default listings
 ]
 
@@ -450,6 +456,11 @@ def _check_emea_timezone_in_description(job_id):
             'any timezone', 'flexible timezone', 'flexible time zone',
             'all timezones', 'all time zones', 'open to all locations',
             'location agnostic', 'location-agnostic', 'fully distributed',
+            # IST/India timezone signals — IST overlaps CET by ~4.5h (9:30-14:00 IST = 06:00-10:30 CET)
+            'ist', 'india standard time', 'india timezone', 'indian timezone',
+            'asia/kolkata', 'overlap with europe', 'overlap with emea',
+            'work with european', 'collaborate with european', 'sync with europe',
+            'global team', 'distributed team', 'async', 'asynchronous',
         ]
         # US/North America only signals
         us_only_signals = [
@@ -471,7 +482,7 @@ def _check_emea_timezone_in_description(job_id):
 
 
 def fetch_linkedin_global():
-    """Fetch backend/Java jobs in India, Boston, New York — verified EMEA timezone compatible."""
+    """Fetch backend/Java jobs in India, Boston, New York — verified EMEA/IST timezone compatible."""
     candidates = []
     searches = [
         # (keywords, location)
@@ -489,6 +500,15 @@ def fetch_linkedin_global():
         ('llm+engineer+EMEA', 'India'),
         ('ai+engineer+EMEA+remote', 'New York, NY'),
         ('genai+engineer+global+remote', 'New York, NY'),
+        # Indian companies with global/flexible remote — IST overlaps CET by ~4.5h
+        ('java+backend+remote+global', 'Bangalore'),
+        ('senior+java+engineer+remote', 'Bangalore'),
+        ('tech+lead+java+remote', 'Bangalore'),
+        ('backend+engineer+remote+flexible', 'Hyderabad, Telangana'),
+        ('senior+software+engineer+java+remote', 'Mumbai'),
+        ('java+backend+remote', 'Chennai'),
+        ('genai+engineer+remote+global', 'Bangalore'),
+        ('llm+engineer+remote', 'Bangalore'),
     ]
     seen_urls = set()
     for query, location in searches:
@@ -593,7 +613,6 @@ def fetch_bluedoor():
     from the EMEA region), normalizes them to the standard job dict shape, and
     lets the existing filter_jobs() apply role + US-exclusion screening on top.
     """
-    from datetime import timedelta
     jobs = []
     posted_after = (datetime.now() - timedelta(days=45)).strftime('%Y-%m-%d')
 
@@ -836,12 +855,18 @@ EMEA_SIGNALS = [
 
 def filter_jobs(jobs):
     """Filter jobs by role keywords, exclude irrelevant roles, and check location."""
+    _cutoff = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
     filtered = []
     for job in jobs:
         title_lower = job['title'].lower()
         location_lower = job['location'].lower()
         tags_lower = job['tags'].lower()
         search_text = f"{title_lower} {tags_lower}"
+
+        # Skip jobs older than 90 days
+        posted = job.get('posted_date', '')
+        if posted and posted < _cutoff:
+            continue
 
         # Check REJECTED_REMOTE_LIST
         company_lower = job['company'].lower()
