@@ -45,6 +45,14 @@ GOOGLE_API_KEY = 'your_gemini_api_key_here'
 # Set to False to disable and remove the Fit column entirely.
 FIT_SCORE_ENABLED = True
 
+# talent.io — optional remote source (French tech-focused job platform).
+# Requires authentication. To enable:
+#   1. Log in to talent.io in your browser
+#   2. Open DevTools → Network, make any search, find an /api/ request
+#   3. Copy the full 'Authorization' header value and paste it below
+# Leave empty or omit to disable (returns no results silently).
+# TALENTIO_AUTH_TOKEN = 'Bearer eyJ...'
+
 # Bluedoor — optional extra remote source (free public ATS-aggregator API:
 # Greenhouse/Lever/Ashby/Workday + 30 more). EMEA-scoped + description-verified.
 # Off by default since most users won't need it; set True to include it in the

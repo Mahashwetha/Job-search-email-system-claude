@@ -37,7 +37,7 @@ except ImportError:
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 try:
-    from config import EMAIL_CONFIG
+    from config import EMAIL_CONFIG, TRACKER_FILE
 except ImportError:
     print("ERROR: config.py not found!")
     print("Please copy config.template.py to config.py and fill in your details.")
@@ -113,6 +113,24 @@ def _load_rejected():
         return []
 
 REJECTED_REMOTE_LIST = _load_rejected()
+
+# ── Tracker Companies ──
+# Companies already in List.xlsx — skip them in remote digest to avoid duplicates.
+def _load_tracker_companies():
+    try:
+        wb = openpyxl.load_workbook(TRACKER_FILE, read_only=True, data_only=True)
+        companies = set()
+        for sheet in wb.worksheets:
+            for row in sheet.iter_rows(min_row=2, max_col=1, values_only=True):
+                name = str(row[0] or '').strip().lower()
+                if name:
+                    companies.add(name)
+        wb.close()
+        return companies
+    except Exception:
+        return set()
+
+TRACKER_COMPANIES = _load_tracker_companies()
 
 # Roles to exclude even if they match keywords above
 ROLE_EXCLUDE = [
@@ -427,13 +445,16 @@ def fetch_linkedin_france():
     return jobs
 
 
-def _check_emea_timezone_in_description(job_id):
+def _check_emea_timezone_in_description(job_id, strict=False):
     """Fetch LinkedIn job description and check for explicit EMEA timezone compatibility.
 
     Returns: 'emea' | 'us_only' | 'unknown'
     - emea: explicit EMEA/Europe/flexible timezone signals found
     - us_only: US-only timezone signals found → reject
     - unknown: no timezone info found → reject (too risky)
+
+    strict=True: used for US-city jobs — requires very explicit remote/EMEA signals,
+                 rejects broad signals like 'global team', 'async' that US office jobs use too.
     """
     try:
         url = f'https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}'
@@ -448,20 +469,24 @@ def _check_emea_timezone_in_description(job_id):
         text = re.sub(r'<[^>]+>', ' ', match.group(1)).lower()
         text = ' '.join(text.split())
 
-        # Explicit EMEA/flexible timezone signals (employee location, not company market)
-        emea_signals = [
+        # Strict signals — explicit remote/EMEA only (used for US-city jobs)
+        strict_emea_signals = [
             'emea', 'europe timezone', 'european timezone',
             'cet', 'cest', 'utc+1', 'utc+2', 'gmt+1', 'gmt+2',
             'work from anywhere', 'work from any', 'anywhere in the world',
             'any timezone', 'flexible timezone', 'flexible time zone',
             'all timezones', 'all time zones', 'open to all locations',
             'location agnostic', 'location-agnostic', 'fully distributed',
-            # IST/India timezone signals — IST overlaps CET by ~4.5h (9:30-14:00 IST = 06:00-10:30 CET)
+            'open to europe', 'open to emea', 'hire in europe',
+        ]
+        # Broader signals — includes IST/India + async signals (used for India jobs)
+        broad_emea_signals = strict_emea_signals + [
             'ist', 'india standard time', 'india timezone', 'indian timezone',
             'asia/kolkata', 'overlap with europe', 'overlap with emea',
             'work with european', 'collaborate with european', 'sync with europe',
             'global team', 'distributed team', 'async', 'asynchronous',
         ]
+        emea_signals = strict_emea_signals if strict else broad_emea_signals
         # US/North America only signals
         us_only_signals = [
             'us timezone', 'us time zone', 'must be in the us', 'must be us',
@@ -484,34 +509,34 @@ def _check_emea_timezone_in_description(job_id):
 def fetch_linkedin_global():
     """Fetch backend/Java jobs in India, Boston, New York — verified EMEA/IST timezone compatible."""
     candidates = []
+    # Each entry: (keywords, location, strict_emea_check)
+    # strict=True for US cities — requires very explicit remote/EMEA signals to avoid office-only noise
+    # strict=False for India — broader signals OK (IST overlap, async, global team)
     searches = [
-        # (keywords, location)
-        ('java+backend+EMEA', 'India'),
-        ('software+engineer+EMEA', 'India'),
-        ('backend+engineer+EMEA', 'India'),
-        ('java+backend+EMEA', 'Boston, MA'),
-        ('software+engineer+EMEA', 'Boston, MA'),
-        ('java+backend+EMEA', 'New York, NY'),
-        ('software+engineer+EMEA', 'New York, NY'),
-        ('backend+engineer+global+remote', 'India'),
-        ('backend+engineer+global+remote', 'New York, NY'),
-        ('backend+engineer+global+remote', 'Boston, MA'),
-        ('genai+engineer+EMEA', 'India'),
-        ('llm+engineer+EMEA', 'India'),
-        ('ai+engineer+EMEA+remote', 'New York, NY'),
-        ('genai+engineer+global+remote', 'New York, NY'),
-        # Indian companies with global/flexible remote — IST overlaps CET by ~4.5h
-        ('java+backend+remote+global', 'Bangalore'),
-        ('senior+java+engineer+remote', 'Bangalore'),
-        ('tech+lead+java+remote', 'Bangalore'),
-        ('backend+engineer+remote+flexible', 'Hyderabad, Telangana'),
-        ('senior+software+engineer+java+remote', 'Mumbai'),
-        ('java+backend+remote', 'Chennai'),
-        ('genai+engineer+remote+global', 'Bangalore'),
-        ('llm+engineer+remote', 'Bangalore'),
+        # India — broad EMEA check (IST overlaps CET ~4.5h)
+        ('java+backend+EMEA', 'India', False),
+        ('software+engineer+EMEA', 'India', False),
+        ('backend+engineer+EMEA', 'India', False),
+        ('backend+engineer+global+remote', 'India', False),
+        ('genai+engineer+EMEA', 'India', False),
+        ('llm+engineer+EMEA', 'India', False),
+        ('java+backend+remote+global', 'Bangalore', False),
+        ('senior+java+engineer+remote', 'Bangalore', False),
+        ('tech+lead+java+remote', 'Bangalore', False),
+        ('backend+engineer+remote+flexible', 'Hyderabad, Telangana', False),
+        ('senior+software+engineer+java+remote', 'Mumbai', False),
+        ('java+backend+remote', 'Chennai', False),
+        ('genai+engineer+remote+global', 'Bangalore', False),
+        ('llm+engineer+remote', 'Bangalore', False),
+        # US cities — strict EMEA check only (must explicitly say remote/EMEA/anywhere)
+        ('java+backend+EMEA+remote', 'Boston, MA', True),
+        ('java+backend+EMEA+remote', 'New York, NY', True),
+        ('backend+engineer+global+remote', 'New York, NY', True),
+        ('backend+engineer+global+remote', 'Boston, MA', True),
+        ('genai+engineer+EMEA+remote', 'New York, NY', True),
     ]
     seen_urls = set()
-    for query, location in searches:
+    for query, location, strict in searches:
         try:
             url = (
                 f'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search'
@@ -539,6 +564,7 @@ def fetch_linkedin_global():
                     'location': locations[i].strip(),
                     'tags': 'EMEA-verified',
                     'posted_date': datetime.now().strftime('%Y-%m-%d'),
+                    '_strict': strict,
                 })
         except Exception as e:
             print(f"  LinkedIn Global error ({query}, {location}): {e}")
@@ -551,13 +577,15 @@ def fetch_linkedin_global():
         if not job_id_match:
             continue
         job_id = job_id_match.group(1)
-        result = _check_emea_timezone_in_description(job_id)
+        strict = job.pop('_strict', False)
+        result = _check_emea_timezone_in_description(job_id, strict=strict)
         if result == 'emea':
+            if strict:
+                job['us_city'] = True  # flag for badge in email
             jobs.append(job)
         time.sleep(1)  # rate limit
 
     print(f"  LinkedIn Global (India/Boston/NY): {len(jobs)} EMEA-compatible jobs (from {len(candidates)} candidates)")
-
     print(f"  LinkedIn Global (India/Boston/NY): {len(jobs)} jobs fetched")
     return jobs
 
@@ -606,22 +634,256 @@ def _bluedoor_company_name(job):
     return name or 'Unknown'
 
 
+def fetch_hellowork():
+    """Fetch remote/hybrid Java & backend jobs from Hellowork (French job board).
+
+    Scrapes the public search results pages for each role keyword, keeps only
+    listings tagged Télétravail (partial or full), and returns up to 5 results.
+    No API key required — public HTML, parsed via BeautifulSoup.
+    """
+    from bs4 import BeautifulSoup
+    import re
+
+    jobs = []
+    seen = set()
+    today = datetime.now()
+
+    search_urls = [
+        'https://www.hellowork.com/fr-fr/emploi/metier_developpeur-java-jee.html',
+        'https://www.hellowork.com/fr-fr/emploi/metier_ingenieur-etudes-et-developpement-java-jee.html',
+        'https://www.hellowork.com/fr-fr/emploi/metier_lead-developer.html',
+        'https://www.hellowork.com/fr-fr/emploi/metier_architecte-technique.html',
+    ]
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'fr-FR,fr;q=0.9',
+    }
+
+    for url in search_urls:
+        if len(jobs) >= 5:
+            break
+        try:
+            resp = requests.get(url, headers=headers, timeout=15)
+            if resp.status_code != 200:
+                continue
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            cards = soup.find_all('a', attrs={'data-cy': 'offerTitle'})
+            for card in cards:
+                if len(jobs) >= 5:
+                    break
+                aria = card.get('aria-label', '')
+                card_text = card.get_text(' ', strip=True)
+
+                # Only keep remote/hybrid listings
+                if 'télétravail' not in card_text.lower() and 'télétravail' not in aria.lower():
+                    continue
+
+                # Extract title and company from nested <p> tags
+                ps = card.find_all('p')
+                if len(ps) < 2:
+                    continue
+                title = ps[0].get_text(strip=True)
+                company = ps[1].get_text(strip=True)
+                if not title or not company:
+                    continue
+
+                key = (company.lower(), title.lower())
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                # Extract location from aria-label: "à {city}, chez {company}"
+                loc_match = re.search(r'\bà (.+?), chez', aria)
+                location = loc_match.group(1).strip() if loc_match else 'France'
+                remote_label = 'Full Remote' if 'total' in card_text.lower() else 'Hybrid Remote'
+                location = f'{location}, FR ({remote_label})'
+
+                href = card.get('href', '')
+                job_url = f'https://www.hellowork.com{href}' if href.startswith('/') else href
+
+                # Approximate posted date from relative time in card text
+                posted_date = today.strftime('%Y-%m-%d')
+                age_match = re.search(r'(\d+)\s+jour', card_text)
+                if age_match:
+                    days = int(age_match.group(1))
+                    posted_date = (today - timedelta(days=days)).strftime('%Y-%m-%d')
+
+                jobs.append({
+                    'company': company,
+                    'title': title,
+                    'url': job_url,
+                    'location': location,
+                    'tags': 'remote france hellowork java',
+                    'source': 'Hellowork',
+                    'posted_date': posted_date,
+                })
+        except Exception as e:
+            print(f'  Hellowork error ({url}): {e}')
+
+    print(f'  Hellowork: {len(jobs)} jobs')
+    return jobs
+
+
+def fetch_talentio():
+    """Fetch tech jobs from talent.io (French tech-focused job platform).
+
+    talent.io is a login-gated SPA — public scraping is not possible without
+    an authenticated session. To enable: log in at talent.io in your browser,
+    copy the 'Authorization' header from any /api/ request (DevTools → Network),
+    and set TALENTIO_AUTH_TOKEN in config.py.
+
+    Until then, this function returns an empty list gracefully.
+    """
+    try:
+        from config import TALENTIO_AUTH_TOKEN
+    except ImportError:
+        TALENTIO_AUTH_TOKEN = None
+
+    if not TALENTIO_AUTH_TOKEN:
+        return []
+
+    jobs = []
+    try:
+        headers = {
+            'Authorization': TALENTIO_AUTH_TOKEN,
+            'User-Agent': 'Mozilla/5.0',
+            'Accept': 'application/json',
+        }
+        # talent.io internal search API (requires auth)
+        params = {
+            'jobTypes': 'FULL_TIME',
+            'remote': 'true',
+            'locations': 'Paris',
+            'roles': 'ENGINEER',
+        }
+        resp = requests.get('https://api.talent.io/api/roles', headers=headers, params=params, timeout=15)
+        if resp.status_code == 200:
+            data = resp.json()
+            for item in (data.get('roles') or data.get('jobs') or [])[:5]:
+                title = item.get('title') or item.get('name', '')
+                company = (item.get('company') or {}).get('name', '')
+                url = item.get('url') or item.get('applyUrl', '')
+                location = item.get('location', 'France (Remote)')
+                if title and company:
+                    jobs.append({
+                        'company': company,
+                        'title': title,
+                        'url': url,
+                        'location': location,
+                        'tags': 'remote france talentio',
+                        'source': 'talent.io',
+                        'posted_date': datetime.now().strftime('%Y-%m-%d'),
+                    })
+    except Exception as e:
+        print(f'  talent.io error: {e}')
+
+    print(f'  talent.io: {len(jobs)} jobs')
+    return jobs
+
+
+def fetch_wttj_remote():
+    """Fetch fully-remote jobs from Welcome to the Jungle (French index).
+
+    Uses the same Algolia backend as daily_job_search.py but filters for
+    remote:fulltime — returns French-company remote postings only.
+    All results are inherently France-workable; no EMEA description check needed.
+    """
+    jobs = []
+    queries = [
+        'java backend', 'senior java', 'backend engineer java',
+        'tech lead java', 'lead developer java', 'senior backend',
+        'genai engineer', 'llm engineer', 'ai engineer backend',
+    ]
+    seen = set()
+    try:
+        url = 'https://CSEKHVMS53-dsn.algolia.net/1/indexes/wttj_jobs_production_fr/query'
+        headers = {
+            'X-Algolia-Application-Id': 'CSEKHVMS53',
+            'X-Algolia-API-Key': '4bd8f6215d0cc52b26430765769e65a0',
+            'Content-Type': 'application/json',
+            'Origin': 'https://www.welcometothejungle.com',
+            'Referer': 'https://www.welcometothejungle.com/',
+            'User-Agent': 'Mozilla/5.0',
+        }
+        for query in queries:
+            try:
+                payload = {
+                    'params': f'query={query}&hitsPerPage=30&facetFilters=[["remote:fulltime","remote:partial"]]'
+                }
+                resp = requests.post(url, headers=headers, json=payload, timeout=15)
+                if resp.status_code != 200:
+                    continue
+                for hit in resp.json().get('hits', []):
+                    title = hit.get('name', '')
+                    org = hit.get('organization', {}) or {}
+                    company = org.get('name', '')
+                    org_slug = org.get('slug', '')
+                    slug = hit.get('slug', '')
+                    if not (title and company and org_slug and slug):
+                        continue
+                    key = (company.lower(), title.lower())
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    offices = hit.get('offices') or []
+                    if offices:
+                        city = offices[0].get('city', '')
+                        country = offices[0].get('country_code', 'FR')
+                    else:
+                        city, country = '', 'FR'
+                    # Only keep French-company postings — the index includes global remote
+                    # roles targeted at FR candidates, which we don't want here
+                    if country.upper() != 'FR':
+                        continue
+                    remote_type = hit.get('remote', '')
+                    remote_label = 'Full Remote' if remote_type == 'fulltime' else 'Hybrid Remote'
+                    location = f'{city}, FR ({remote_label})' if city else f'France ({remote_label})'
+                    pub_at = hit.get('published_at', '')
+                    if isinstance(pub_at, (int, float)) and pub_at:
+                        posted_date = datetime.fromtimestamp(pub_at).strftime('%Y-%m-%d')
+                    elif isinstance(pub_at, str):
+                        posted_date = pub_at[:10]
+                    else:
+                        posted_date = ''
+                    job_url = f'https://www.welcometothejungle.com/fr/companies/{org_slug}/jobs/{slug}'
+                    jobs.append({
+                        'company': company.strip(),
+                        'title': title.strip(),
+                        'url': job_url,
+                        'location': location.strip(),
+                        'tags': 'remote france',
+                        'source': 'WTTJ',
+                        'posted_date': posted_date,
+                    })
+            except Exception as e:
+                print(f'  WTTJ remote error ({query}): {e}')
+    except Exception as e:
+        print(f'  WTTJ remote fetch error: {e}')
+    print(f'  WTTJ remote: {len(jobs)} jobs')
+    return jobs
+
+
 def fetch_bluedoor():
     """Fetch EMEA-compatible remote jobs from the bluedoor public ATS API.
 
-    Pulls remote roles scoped to EMEA countries (so a remote job is workable
-    from the EMEA region), normalizes them to the standard job dict shape, and
-    lets the existing filter_jobs() apply role + US-exclusion screening on top.
+    The country= filter no longer returns results for remote jobs (API changed).
+    Instead we query by role keyword (q=) without a country filter, then rely on
+    verify_bluedoor_jobs() to confirm each job is EMEA-workable from its description.
     """
     jobs = []
+    seen_ids = set()
     posted_after = (datetime.now() - timedelta(days=45)).strftime('%Y-%m-%d')
 
-    for country in BLUEDOOR_EMEA_COUNTRIES:
+    # Role keywords to query — keeps result set focused without country filter
+    bd_keywords = ['java', 'backend', 'software engineer', 'tech lead',
+                   'ai engineer', 'llm engineer', 'generative ai']
+
+    for kw in bd_keywords:
         cursor = None
-        for _page in range(2):  # up to 2 pages per country
+        for _page in range(2):  # up to 2 pages per keyword
             try:
                 params = {
-                    'country': country,
+                    'q': kw,
                     'workplace_type': 'remote',
                     'active': 'true',
                     'posted_after': posted_after,
@@ -634,11 +896,14 @@ def fetch_bluedoor():
                 resp.raise_for_status()
                 payload = resp.json()
             except Exception as e:
-                print(f"  Bluedoor error ({country}): {e}")
+                print(f"  Bluedoor error (q={kw!r}): {e}")
                 break
 
             for item in payload.get('data', []):
-                # Build a real location string so filter_jobs geo screening still runs
+                job_id = item.get('job_id')
+                if job_id in seen_ids:
+                    continue
+                seen_ids.add(job_id)
                 loc_parts = [item.get('city'), item.get('region'), item.get('country')]
                 location = ', '.join(p for p in loc_parts if p) or 'Remote'
                 workplace = item.get('workplace_type') or item.get('remote_policy') or ''
@@ -651,16 +916,16 @@ def fetch_bluedoor():
                     'location': location,
                     'tags': ', '.join(t for t in [item.get('department'), workplace] if t),
                     'posted_date': posted,
-                    '_bd_job_id': item.get('job_id'),   # for late EMEA verification
+                    '_bd_job_id': job_id,
                     '_bd_country': item.get('country') or '',
                 })
 
             cursor = (payload.get('meta') or {}).get('next_cursor')
             if not cursor:
                 break
-        time.sleep(0.3)  # be polite
+        time.sleep(0.3)
 
-    print(f"  Bluedoor: {len(jobs)} EMEA remote jobs fetched")
+    print(f"  Bluedoor: {len(jobs)} remote jobs fetched (pre-EMEA-verify)")
     return jobs
 
 
@@ -880,6 +1145,11 @@ def filter_jobs(jobs):
         if blocklisted:
             continue
 
+        # Skip companies already in the job tracker
+        if any(company_lower == t or t in company_lower or company_lower in t
+               for t in TRACKER_COMPANIES):
+            continue
+
         # Exclude roles that need ML/data science, are frontend, devops, etc.
         if any(ex in search_text for ex in ROLE_EXCLUDE):
             continue
@@ -928,6 +1198,12 @@ def filter_jobs(jobs):
         # Must have an EMEA-compatible location signal
         has_emea_loc = any(inc in loc_tags for inc in LOCATION_INCLUDE)
         if has_emea_loc:
+            # India-tier jobs must explicitly say "remote" — office-only Indian roles are not useful
+            INDIA_CITIES = ['india', 'bangalore', 'bengaluru', 'hyderabad', 'mumbai', 'pune',
+                            'chennai', 'delhi', 'noida', 'gurgaon', 'gurugram']
+            is_india_location = any(city in loc_tags for city in INDIA_CITIES)
+            if is_india_location and 'remote' not in loc_tags and 'remote' not in title_lower:
+                continue
             filtered.append(job)
             continue
 
@@ -942,12 +1218,12 @@ def filter_jobs(jobs):
 
 
 def get_location_tier(job):
-    """Return location priority tier (0=Paris, 1=France, 2=EMEA/CET, 3=UK, 4=global)."""
+    """Return location priority tier (0=Paris, 1=France, 2=EMEA/CET, 3=UK, 4=global, 5=India, 6=other)."""
     loc = job['location'].lower()
     for keywords, tier in LOCATION_PRIORITY:
         if any(kw in loc for kw in keywords):
             return tier
-    return 5  # Unknown location goes last
+    return 6  # Unknown location goes last
 
 
 def is_explicitly_remote(job):
@@ -1110,7 +1386,7 @@ def dump_to_excel(jobs):
 
 # ============= HTML EMAIL =============
 
-TIER_LABELS = {0: 'Paris', 1: 'France', 2: 'EMEA / CET', 3: 'UK', 4: 'Global / Remote', 5: 'Remote (Region Unspecified)'}
+TIER_LABELS = {0: 'Paris', 1: 'France', 2: 'EMEA / CET', 3: 'UK', 4: 'Global / Remote', 5: 'India (IST — Remote-friendly)', 6: 'Other'}
 
 def build_html(jobs, new_count=0, total_unchanged=False):
     """Build styled HTML email with job listings grouped by location tier."""
@@ -1131,7 +1407,8 @@ def build_html(jobs, new_count=0, total_unchanged=False):
         if tier != current_tier:
             current_tier = tier
             label = TIER_LABELS.get(tier, 'Other')
-            rows_html += f'                <tr style="background:#e8f5e9;font-weight:bold;"><td colspan="6" style="padding:4px 6px;font-size:11px;color:#2c3e50;">📍 {label}</td></tr>\n'
+            subtitle = ' <span style="font-weight:normal;font-size:10px;color:#555;">— Indian company, work remotely from France (IST/CET overlap ~4.5h)</span>' if tier == 5 else ''
+            rows_html += f'                <tr style="background:#e8f5e9;font-weight:bold;"><td colspan="6" style="padding:4px 6px;font-size:11px;color:#2c3e50;">📍 {label}{subtitle}</td></tr>\n'
 
         is_new = job.get('is_new', False)
         row_style = ' style="background:#d4edda;"' if is_new else ''
@@ -1140,9 +1417,15 @@ def build_html(jobs, new_count=0, total_unchanged=False):
         note_html = ''
         if job.get('location_note'):
             note_html = f'<br><span style="font-size:9px;color:#e67e22;font-weight:bold;">{job["location_note"]}</span>'
+        if tier == 5:
+            note_html += '<br><span style="font-size:9px;color:#e67e22;font-weight:bold;">🇮🇳 Indian co. — remote from FR (IST/CET)</span>'
 
+        india_badge = ' <span style="background:#ff9800;color:white;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:bold;">🇮🇳 IN</span>' if tier == 5 else ''
+        if job.get('us_city'):
+            note_html += '<br><span style="font-size:9px;color:#1565c0;font-weight:bold;">🇺🇸 US co. — EMEA remote explicitly allowed</span>'
+        us_badge = ' <span style="background:#1565c0;color:white;padding:1px 4px;border-radius:3px;font-size:9px;font-weight:bold;">🇺🇸 US</span>' if job.get('us_city') else ''
         rows_html += f"""                <tr{row_style}>
-                    <td><strong>{job['company']}</strong>{new_badge}</td>
+                    <td><strong>{job['company']}</strong>{new_badge}{india_badge}{us_badge}</td>
                     <td><a href="{job['url']}" style="color: #3498db; text-decoration: underline;">{job['title']}</a></td>
                     <td>{job['source']}</td>
                     <td>{job['location']}{note_html}<br><span style="font-size:9px;color:#7f8c8d;">{job['tags']}</span></td>
@@ -1244,6 +1527,9 @@ def main(no_save=False):
     all_jobs.extend(fetch_jobicy())
     all_jobs.extend(fetch_linkedin_france())
     all_jobs.extend(fetch_linkedin_global())
+    all_jobs.extend(fetch_wttj_remote())
+    all_jobs.extend(fetch_hellowork())
+    all_jobs.extend(fetch_talentio())
     if BLUEDOOR_ENABLED:
         all_jobs.extend(fetch_bluedoor())
     else:
