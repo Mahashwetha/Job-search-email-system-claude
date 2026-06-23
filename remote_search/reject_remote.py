@@ -128,6 +128,11 @@ EXAMPLES:
             print("Usage: python reject_remote.py --remove \"company\" \"title\"")
             sys.exit(1)
         remove(args[1], args[2])
+    elif args[0] == '--add':
+        if len(args) < 3:
+            print("Usage: python reject_remote.py --add \"company\" \"title\"")
+            sys.exit(1)
+        add(args[1], args[2])
     else:
         if len(args) < 2:
             print("Usage: python reject_remote.py \"company\" \"title\"")

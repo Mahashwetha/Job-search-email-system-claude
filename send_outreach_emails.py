@@ -42,7 +42,7 @@ TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'emailou
 
 # PDF files to attach — update filenames to match your actual files
 ATTACHMENTS = [
-    os.path.join(RESUME_DIR, 'mahashwetharao_resume_2026_English.pdf'),       # <-- your resume PDF
+    os.path.join(RESUME_DIR, 'mahashwetharao_resume_2026_English_latest.pdf'),       # <-- your resume PDF
     os.path.join(RESUME_DIR, 'portfolio_personal_projects_mahashwetha.pdf'),   # <-- your portfolio PDF
 ]
 
