@@ -439,16 +439,18 @@ def fetch_linkedin_jobs(keywords, location):
         locations = re.findall(r'job-search-card__location[^>]*>([^<]+)<', resp.text)
         links = re.findall(r'href="(https://(?:fr|www)\.linkedin\.com/jobs/view/[^"]+)"', resp.text)
 
-        dates = re.findall(r'job-search-card__listdate[^>]*datetime="([^"]+)"', resp.text)
+        date_elements = re.findall(r'job-search-card__listdate[^>]*datetime="([^"]+)"[^>]*>\s*([^<]*?)\s*<', resp.text)
         for i in range(min(len(titles), len(companies), len(locations), len(links))):
             clean_url = unescape(links[i]).split('?')[0]
-            posted_date = dates[i][:10] if i < len(dates) else ''
+            posted_date = date_elements[i][0][:10] if i < len(date_elements) else ''
+            is_reposted = date_elements[i][1].strip().lower() == 'reposted' if i < len(date_elements) else False
             jobs.append({
                 'company': unescape(companies[i].strip()),
                 'title': unescape(titles[i].strip()),
                 'url': clean_url,
                 'location': unescape(locations[i].strip()),
                 'posted_date': posted_date,
+                'reposted': is_reposted,
             })
     except Exception as e:
         print(f"  LinkedIn hot jobs error ({keywords}, {location}): {e}")
@@ -735,7 +737,7 @@ def fetch_hot_jobs(tracker):
         existing = current.get(category, [])
 
         # Remove jobs whose company is now in the tracker, or match global exclusions
-        _cutoff = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
+        _cutoff = (datetime.now() - timedelta(days=21)).strftime('%Y-%m-%d')
         kept = []
         for job in existing:
             title_lower = job['title'].lower()
@@ -752,7 +754,7 @@ def fetch_hot_jobs(tracker):
                 global_urls.discard(job['url'])
                 global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
             elif job.get('posted_date', '9999') < _cutoff:
-                print(f"  [{category}] Removed '{job['company']}' (posted {job.get('posted_date')} — older than 90 days)")
+                print(f"  [{category}] Removed '{job['company']}' (posted {job.get('posted_date')} — older than 21 days)")
                 global_urls.discard(job['url'])
                 global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
             else:
@@ -777,7 +779,7 @@ def fetch_hot_jobs(tracker):
                 _source_counts['LinkedIn'] += len(linkedin_jobs)
                 jobs = linkedin_jobs
                 loc_lower = location.lower()
-                if any(x in loc_lower for x in ('france', 'paris')) and keywords not in wttj_queried:
+                if any(x in loc_lower for x in ('france', 'paris', 'europe')) and keywords not in wttj_queried:
                     wttj_jobs = fetch_wttj_jobs(keywords)
                     _source_counts['WTTJ'] += len(wttj_jobs)
                     print(f"    WTTJ '{keywords}': {len(wttj_jobs)} results")
@@ -807,6 +809,8 @@ def fetch_hot_jobs(tracker):
                         continue
                     title_lower = job['title'].lower()
                     if any(kw in title_lower for kw in ('stage', 'alternance', 'alternant', 'internship', 'intern', 'junior')):
+                        continue
+                    if job.get('reposted'):
                         continue
                     if title_filter:
                         if not any(kw in title_lower for kw in title_filter):
@@ -870,7 +874,16 @@ def fetch_hot_jobs(tracker):
                         filled += 1
                     time.sleep(2)
             else:
-                for job in candidates[:slots_needed]:
+                # Enforce WTTJ > LinkedIn in new slots
+                wttj_picks = [j for j in candidates if j.get('source') == 'WTTJ']
+                linkedin_picks = [j for j in candidates if j.get('source') == 'LinkedIn']
+                other_picks = [j for j in candidates if j.get('source') not in ('WTTJ', 'LinkedIn')]
+                max_li = max(0, len(wttj_picks) - 1) if wttj_picks else slots_needed
+                ordered_picks = (wttj_picks + linkedin_picks[:max_li] + other_picks)[:slots_needed]
+                if len(ordered_picks) < slots_needed:
+                    used = set(id(j) for j in ordered_picks)
+                    ordered_picks += [j for j in candidates if id(j) not in used][:slots_needed - len(ordered_picks)]
+                for job in ordered_picks:
                     kept.append(job)
                     global_urls.add(job['url'])
                     global_keys.add((job['company'].lower().strip(), job['title'].lower().strip()))
@@ -989,6 +1002,9 @@ def create_job_report():
                 idx += 1
         scored = sum(1 for f in fit_scores if f)
         print(f"  Fit scores added to {scored}/{hot_jobs_total} hot jobs")
+        import math
+        gemini_calls = math.ceil(hot_jobs_total / 15)
+        print(f"  Gemini quota used: ~{gemini_calls}/20 calls today — ~{20 - gemini_calls} remaining for Fit-Check service")
 
     hot_jobs_html = build_hot_jobs_html(hot_jobs_by_category, source_warnings)
 
@@ -1247,9 +1263,11 @@ def main():
     from outreach_drafter import run_outreach
     run_outreach()
 
-    # Generate tailored resumes for applied companies
-    from resume_tailor import run_tailor
-    run_tailor()
+    # Resume tailor — toggle RESUME_TAILOR_ENABLED in config.py (off by default, quota-heavy)
+    from config import RESUME_TAILOR_ENABLED
+    if RESUME_TAILOR_ENABLED:
+        from resume_tailor import run_tailor
+        run_tailor()
 
 def run_hot_jobs_only():
     """Standalone hot jobs check - prints to console, no email.

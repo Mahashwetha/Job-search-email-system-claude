@@ -2,7 +2,7 @@
 
 An end-to-end automated job search pipeline that handles everything from finding opportunities to preparing applications. Sends daily styled HTML email digests from your Excel tracker, scans remote job APIs for EMEA-compatible roles, tailors resumes per company using Gemini AI, sends HR outreach emails with attachments, and drafts LinkedIn outreach messages — all on autopilot via Windows Task Scheduler.
 
-**Heavily driven by Claude Code Skills** — 10 plain-language voice commands cover the entire workflow: adding jobs, rejecting, opening hot jobs, emailing HR, tailoring resumes, fit-checking a posting, and more. No scripts to remember, no flags to type.
+**Heavily driven by Claude Code Skills** — 11 plain-language voice commands cover the entire workflow: adding jobs, rejecting, opening hot jobs, emailing HR, tailoring resumes, generating cover letters, fit-checking a posting, and more. No scripts to remember, no flags to type.
 
 ## Features
 
@@ -11,13 +11,14 @@ An end-to-end automated job search pipeline that handles everything from finding
 - **Remote Job Scanner** - Fetches from RemoteOK, Remotive, We Work Remotely, Jobicy, LinkedIn (France/Global), and **Bluedoor** (free public ATS-aggregator API — Greenhouse/Lever/Ashby/Workday + 27 more) every 2 days, filters for EMEA-compatible roles. Bluedoor jobs are scoped to EMEA countries at the source, then **description-verified** (drops hard US-only roles, and annotates when a job's real scope is broader than its country tag, e.g. *"Tagged Poland → actually global remote"*)
 - **Fit Scoring** - Daily **Hot Jobs** and **remote** listings get a Gemini-scored fit badge (Strong/Good/Moderate/Weak %) against your resume, shown inline in both emails. Scored in chunked batches (15/call) to avoid truncation; if Gemini is rate-limited the email still sends and the log warns clearly rather than silently shipping a blank column. Also available on-demand for any single posting via the `fit-check` skill.
 - **Resume Tailor** - Per-company tailored resumes using Gemini 2.5 Flash (free tier) — never fabricates, only reorders and surfaces existing skills
+- **Cover Letter Generator** - Tailored cover letters per job posting using a fixed personal template + Gemini-generated matched-skills and gap-bridge paragraphs. Saves DOCX to `cover_letters/`. Invoke via `/cover-letter <url>` or natural language
 - **Outreach Drafter** - Auto-generates short/medium/long LinkedIn message templates for each applied company
 - **HR Outreach Emails** - CLI script to send personalised cold outreach emails to HR contacts with resume + portfolio attached — auto-detects role from tracker, always previews before sending
 - **Excel Integration** - Reads your application tracker daily for statuses, role links, and HR contacts
 - **HR Contact Management** - Maintains recruiter contacts with clickable LinkedIn hyperlinks
 - **Platform Aggregators** - Curated search links (Glassdoor, LinkedIn, WelcomeToTheJungle, etc.)
 - **Windows Automation** - Runs on autopilot via Task Scheduler
-- **Claude Code Skills (10)** - Plain-language commands for every step: add jobs, reject, open hot jobs, email HR, tailor resume, fit-check a posting, run search — no flags, no scripts to remember, just say what you want
+- **Claude Code Skills (11)** - Plain-language commands for every step: add jobs, reject, open hot jobs, email HR, tailor resume, generate cover letter, fit-check a posting, run search — no flags, no scripts to remember, just say what you want
 
 ## Email Previews
 
@@ -358,7 +359,7 @@ python fit_check.py "<job_url>" [--title "..."] [--company "..."]
 
 ## Resume Tailor
 
-Automatically generates per-company tailored resumes using **Gemini 2.5 Flash** (free tier, $0 cost). Runs at the end of the daily pipeline, after outreach drafts.
+Generates per-company tailored resumes using **Gemini 2.5 Flash** (free tier). **Runs on demand only** — disabled in the daily pipeline by default to preserve Gemini quota. Toggle with `RESUME_TAILOR_ENABLED` in `config.py` (same pattern as `FIT_SCORE_ENABLED`). When using the `resume-tailor` skill, Claude auto-enables the flag, runs the tailor, then switches it back off.
 
 **What it does:**
 - Reads applied companies (status = "done") with non-LinkedIn role links from the Excel tracker
@@ -430,6 +431,7 @@ This project includes **10 skills** covering every stage of the job search:
 | **send-outreach** | Sends a cold outreach email to an HR contact — test preview first, then real send | "send outreach to Andrea at Natixis" · "email HR at CFM" · "reach out to Mistral" |
 | **update-hr** | Searches LinkedIn for HR contacts at a company and adds them to the tracker | "find HR for BNP" · "add recruiter for Société Générale" |
 | **resume-tailor** | Fetches the job description and generates a tailored resume via Gemini AI | "tailor resume for Filigran" · "adapt my resume to this role" |
+| **cover-letter** | Generates a tailored cover letter for a job URL — fixed personal template + Gemini-written matched-skills and gap paragraphs — saves DOCX to `cover_letters/` | `/cover-letter <url>` · "cover letter for Constructor" · "generate cover letter https://..." |
 | **fit-check** | Scores a single job posting against your resume (fetches the full JD) — returns score, strengths, gaps, and a recommendation | "fit-check &lt;url&gt;" · "is this a good fit?" · "score this job &lt;url&gt;" |
 
 ### Pipeline Control
@@ -479,6 +481,7 @@ claude-job-agent/
 ├── resume_tailor.py                   # Per-company resume tailoring via Gemini AI
 ├── fit_scorer.py                      # Gemini fit scoring (batch for digests + single for fit-check)
 ├── fit_check.py                       # CLI: score one job posting against your resume
+├── cover_letter.py                    # CLI: generate tailored cover letter for a job URL
 ├── send_outreach_emails.py            # CLI: send cold outreach emails to HR with PDF attachments
 ├── remote_search/
 │   ├── remote_job_search.py           # Remote job API scanner (EMEA filter + Bluedoor + fit + Excel dump)
@@ -516,6 +519,7 @@ claude-job-agent/
         ├── update-hr/SKILL.md         # Auto-triggered: find and add HR contacts
         ├── resume-tailor/SKILL.md     # Auto-triggered: tailor resume for a company
         ├── send-outreach/SKILL.md     # Auto-triggered: send cold outreach email to HR contact
+        ├── cover-letter/SKILL.md      # Auto-triggered: generate tailored cover letter for a job URL
         └── fit-check/SKILL.md         # Auto-triggered: score one job posting vs your resume
 ```
 
