@@ -30,3 +30,12 @@ LinkedIn URLs are skipped automatically in batch mode.
 ## If you hit rate limits
 
 The free Gemini tier occasionally returns 429 errors — the script retries automatically. If it keeps failing, wait a minute and re-run. Use `gemini-2.5-flash`, not `gemini-2.0-flash` (that quota runs out faster).
+
+## Note: on-demand only
+
+Resume tailor is NOT part of the daily job search run — controlled by `RESUME_TAILOR_ENABLED` in `config.py` (default: False).
+
+When the user asks to tailor a resume:
+1. Set `RESUME_TAILOR_ENABLED = True` in `config.py`
+2. Run the tailor
+3. Set `RESUME_TAILOR_ENABLED = False` in `config.py` again
