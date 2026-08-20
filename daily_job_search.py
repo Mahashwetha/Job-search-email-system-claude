@@ -392,6 +392,15 @@ DEFAULT_HOT_JOB_QUERIES = {
         ('anthropic', 'Europe'),
         ('mistral', 'Europe'),
     ],
+    'Staff / Principal Engineer': [
+        ('staff+software+engineer', 'Paris, France'),
+        ('staff+backend+engineer', 'Paris, France'),
+        ('principal+software+engineer', 'Paris, France'),
+        ('principal+backend+engineer', 'Paris, France'),
+        ('staff+engineer+backend', 'Paris, France'),
+        ('staff+software+engineer', 'France'),
+        ('principal+engineer+backend', 'France'),
+    ],
 }
 
 # Per-category title filters.
@@ -410,6 +419,7 @@ HOT_JOB_TITLE_FILTERS = {
                                    'lead backend', 'technical lead', 'développeur lead'],
     'AI / GenAI Engineer': ['ai', 'genai', 'gen ai', 'llm', 'generative', 'machine learning',
                             'artificial intelligence', 'openai', 'anthropic', 'mistral'],
+    'Staff / Principal Engineer': ['staff', 'principal', 'distinguished', 'architect'],
 }
 
 # These categories require the job *description* to contain at least one of these keywords.
@@ -493,7 +503,7 @@ def fetch_wttj_jobs(query):
             'User-Agent': 'Mozilla/5.0',
         }
         clean_query = query.replace('+', ' ')
-        payload = {'params': f'query={clean_query}&hitsPerPage=30'}
+        payload = {'params': f'query={clean_query}&hitsPerPage=30&filters=offices.country_code%3AFR'}
         resp = requests.post(url, headers=headers, json=payload, timeout=15)
         if resp.status_code != 200:
             return jobs
@@ -511,6 +521,10 @@ def fetch_wttj_jobs(query):
                 country = offices[0].get('country_code', 'FR')
             else:
                 city, country = '', 'FR'
+            remote = hit.get('remote', 'no')
+            # Only keep France-based jobs or fully-remote roles
+            if country != 'FR' and remote != 'fulltime':
+                continue
             if org_slug and slug:
                 job_url = f'https://www.welcometothejungle.com/fr/companies/{org_slug}/jobs/{slug}'
             else:
@@ -639,12 +653,23 @@ def fetch_builtin_company(job_url):
     return ''
 
 
+_IDF_CITIES = [
+    'paris', 'île-de-france', 'ile-de-france', 'greater paris', 'idf',
+    'boulogne-billancourt', 'issy-les-moulineaux', 'courbevoie', 'nanterre',
+    'clichy', 'saint-ouen', 'st-ouen', 'levallois', 'neuilly', 'puteaux',
+    'suresnes', 'montrouge', 'malakoff', 'vanves', 'clamart', 'vélizy',
+    'velizy', 'meudon', 'châtillon', 'chatillon', 'vincennes', 'montreuil',
+    'saint-denis', 'créteil', 'creteil', 'maisons-alfort', 'versailles',
+    'massy', 'gif-sur-yvette', 'saclay', 'antony', 'châtenay', 'chatenay',
+    'rueil', 'colombes', 'asnières', 'asnieres', 'gennevilliers',
+]
+
 def get_hot_job_location_tier(location):
-    """Return location priority: Paris(0) → France(1) → EMEA(2) → Other(3)."""
+    """Return location priority: Paris/IDF(0) → France(1) → EMEA(2) → Other(3)."""
     loc = location.lower()
-    if 'paris' in loc:
+    if any(city in loc for city in _IDF_CITIES):
         return 0
-    if 'france' in loc or 'île-de-france' in loc or 'ile-de-france' in loc:
+    if 'france' in loc:
         return 1
     emea = ['europe', 'emea', 'germany', 'netherlands', 'belgium', 'spain',
             'italy', 'switzerland', 'uk', 'united kingdom', 'ireland',
@@ -695,15 +720,40 @@ def _is_in_tracker(job_company, tracker_names):
 def _is_blocklisted(job_company, job_title, blocklist):
     """Check if a specific job (company+role) is blocklisted."""
     for entry in blocklist:
-        if '||' in entry:
-            bl_company, bl_role = entry.split('||', 1)
-            if bl_company in job_company and bl_role in job_title:
-                return True
+        sep = '||' if '||' in entry else ('|' if '|' in entry else None)
+        if sep:
+            bl_company, bl_role = entry.split(sep, 1)
+            bl_company = bl_company.lower().strip()
+            bl_role = bl_role.lower().strip()
+            if (bl_company in job_company or job_company in bl_company):
+                if not bl_role or bl_role in job_title or job_title in bl_role:
+                    return True
         else:
-            # Legacy: company-only blocklist entry
-            if entry in job_company or job_company in entry:
+            if entry.lower().strip() in job_company or job_company in entry.lower().strip():
                 return True
     return False
+
+
+_EXPIRED_PHRASES = [
+    "cette offre n’est plus disponible",
+    "cette offre n’est plus disponible",
+    "this job is no longer available",
+    "this offer is no longer available.",
+    "no longer accepting applications",
+    "job is closed",
+    "offre expirée",
+    "cette offre a expiré",
+]
+
+def is_job_expired(url):
+    """Return True if the job listing page signals it is no longer available."""
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        resp = requests.get(url, headers=headers, timeout=8)
+        text = resp.text.lower()
+        return any(phrase in text for phrase in _EXPIRED_PHRASES)
+    except Exception:
+        return False
 
 
 def fetch_hot_jobs(tracker):
@@ -745,7 +795,7 @@ def fetch_hot_jobs(tracker):
                 print(f"  [{category}] Removed '{job['company']}' (now in tracker)")
                 global_urls.discard(job['url'])
                 global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
-            elif any(kw in title_lower for kw in ('stage', 'alternance', 'alternant', 'internship', 'intern', 'junior')):
+            elif any(kw in title_lower for kw in ('stage', 'stagiaire', 'alternance', 'alternant', 'internship', 'intern', 'junior', 'apprentice', 'apprenticeship', 'presales', 'pre-sales', 'pre sales', 'solutions engineer', 'solution engineer', 'embedded', 'embarqué', 'embarque', 'forward deployed', 'operational research', 'recherche opérationnelle')):
                 print(f"  [{category}] Removed '{job['company']}' (excluded title keyword)")
                 global_urls.discard(job['url'])
                 global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
@@ -757,10 +807,18 @@ def fetch_hot_jobs(tracker):
                 print(f"  [{category}] Removed '{job['company']}' (posted {job.get('posted_date')} — older than 21 days)")
                 global_urls.discard(job['url'])
                 global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
+            elif is_job_expired(job.get('url', '')):
+                print(f"  [{category}] Removed '{job['company']}' (listing no longer available)")
+                global_urls.discard(job['url'])
+                global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
+            elif get_hot_job_location_tier(job.get('location', '')) > 0:
+                print(f"  [{category}] Removed '{job['company']}' (non-Paris/IDF location: {job.get('location', '?')})")
+                global_urls.discard(job['url'])
+                global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
             else:
                 kept.append(job)
 
-        max_slots = 8 if category in ('Tech Lead / Lead Developer', 'AI / GenAI Engineer') else 5
+        max_slots = 5 if category == 'Assistant Project Manager' else 8
 
         # Always reserve 1 slot for BuiltIn — drop last non-BuiltIn job if all slots full
         has_builtin = any(j.get('source') == 'BuiltIn' for j in kept)
@@ -808,7 +866,7 @@ def fetch_hot_jobs(tracker):
                     if _is_blocklisted(job['company'].lower().strip(), job['title'].lower().strip(), blocklist):
                         continue
                     title_lower = job['title'].lower()
-                    if any(kw in title_lower for kw in ('stage', 'alternance', 'alternant', 'internship', 'intern', 'junior')):
+                    if any(kw in title_lower for kw in ('stage', 'stagiaire', 'alternance', 'alternant', 'internship', 'intern', 'junior', 'apprentice', 'apprenticeship')):
                         continue
                     if job.get('reposted'):
                         continue
@@ -874,15 +932,21 @@ def fetch_hot_jobs(tracker):
                         filled += 1
                     time.sleep(2)
             else:
-                # Enforce WTTJ > LinkedIn in new slots
-                wttj_picks = [j for j in candidates if j.get('source') == 'WTTJ']
-                linkedin_picks = [j for j in candidates if j.get('source') == 'LinkedIn']
-                other_picks = [j for j in candidates if j.get('source') not in ('WTTJ', 'LinkedIn')]
-                max_li = max(0, len(wttj_picks) - 1) if wttj_picks else slots_needed
-                ordered_picks = (wttj_picks + linkedin_picks[:max_li] + other_picks)[:slots_needed]
-                if len(ordered_picks) < slots_needed:
-                    used = set(id(j) for j in ordered_picks)
-                    ordered_picks += [j for j in candidates if id(j) not in used][:slots_needed - len(ordered_picks)]
+                # Paris-first: fill slots from Paris candidates, then non-Paris for leftover slots
+                # Within each location group: guarantee 1 per source, then waterfall WTTJ > BuiltIn > LinkedIn
+                def _source_waterfall(pool, n):
+                    wttj    = [j for j in pool if j.get('source') == 'WTTJ']
+                    builtin = [j for j in pool if j.get('source') == 'BuiltIn']
+                    li      = [j for j in pool if j.get('source') == 'LinkedIn']
+                    g = []
+                    if wttj:    g.append(wttj.pop(0))
+                    if builtin: g.append(builtin.pop(0))
+                    if li:      g.append(li.pop(0))
+                    return (g + wttj + builtin + li)[:n]
+
+                # Only Paris/IDF jobs (tier 0) — non-Paris slots stay empty rather than backfilling
+                paris_candidates = [j for j in candidates if get_hot_job_location_tier(j['location']) == 0]
+                ordered_picks    = _source_waterfall(paris_candidates, slots_needed)
                 for job in ordered_picks:
                     kept.append(job)
                     global_urls.add(job['url'])

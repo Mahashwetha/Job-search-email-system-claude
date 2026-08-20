@@ -34,13 +34,18 @@ Manage the hot jobs list in `daily_hot_jobs.json`. Hot jobs are sticky LinkedIn 
 
 ## Steps
 
-1. Read `daily_hot_jobs.json`.
-2. If the user didn't specify which jobs they applied to vs dismissed, ask — applied jobs should NOT be blocklisted.
-3. Make the changes (clear slots + update blocklist as needed).
-4. Write the file back.
-5. Confirm: how many slots cleared, how many blocklisted, which category.
+1. If the user didn't specify which jobs they applied to vs dismissed, ask — applied jobs should NOT be blocklisted.
+2. For each job to blocklist, run the script:
+   ```
+   python .claude/skills/remove-hot-job/scripts/blocklist_job.py "Company Name" "Job Title"
+   ```
+   Run from the project root (`C:/Users/mahas/Learnings/claude-job-agent`).
+   - Title is optional — omit to blocklist all jobs from that company.
+   - The script removes from `current_jobs` AND adds to blocklist in one shot.
+   - Uses `ensure_ascii=False` so no encoding issues.
+3. Confirm output to the user: removed from current_jobs + blocklisted.
 
 ## Important notes
-- Blocklist entries must be `[company.lower().strip(), title.lower().strip()]` — lowercase, no leading/trailing spaces.
 - Clearing slots triggers backfill on the next daily run (11:00 AM).
 - Do NOT run the daily script after editing — changes take effect on the next scheduled run.
+- Never manually edit `daily_hot_jobs.json` — always use the script to avoid encoding errors.
