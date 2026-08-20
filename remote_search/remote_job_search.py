@@ -144,7 +144,8 @@ ROLE_EXCLUDE = [
     'account executive', 'sales ', 'marketing',
     'full stack', 'full-stack', 'fullstack',
     'network engineer', 'voip', 'linux admin',
-    'consultant', 'werkstudent', 'intern ',
+    'consultant', 'werkstudent', 'intern ', 'apprentice', 'apprenticeship',
+    'stage ', 'stagiaire', 'alternance', 'alternant',
     'new grad', 'graduate engineer', 'entry level', 'junior ',
     'guatemala', 'latin america', 'latam',
     'ror ', 'rails developer', 'ruby on rails',
@@ -169,7 +170,7 @@ LOCATION_PRIORITY = [
       'sweden', 'norway', 'denmark', 'portugal', 'ireland',
       'cet', 'cest', 'central european'], 2),
     # Tier 3: UK (GMT+0/+1, close to CET)
-    (['uk', 'united kingdom', 'london', 'britain'], 3),
+    (['uk', 'united kingdom', 'london', 'britain', 'bst'], 3),
     # Tier 4: Worldwide/anywhere/global
     (['worldwide', 'anywhere', 'global'], 4),
     # Tier 5: India (IST overlaps CET ~4.5h — viable with async-friendly or flexible-hour roles)
@@ -186,7 +187,7 @@ LOCATION_INCLUDE = REMOTE_LOCATION_INCLUDE or [
     'romania', 'hungary', 'greece', 'finland', 'croatia',
     'luxembourg', 'berlin', 'amsterdam', 'barcelona', 'munich',
     'dublin', 'lisbon', 'warsaw', 'prague', 'vienna', 'brussels',
-    'gmt', 'cet', 'cest', 'central european', 'utc+1', 'utc+2',
+    'gmt', 'cet', 'cest', 'bst', 'cest/edt', 'central european', 'utc+1', 'utc+2',
     # Indian cities — for IST-overlap roles (tier 5, sorted last)
     'india', 'bangalore', 'bengaluru', 'hyderabad', 'mumbai', 'pune',
     'chennai', 'delhi', 'noida', 'gurgaon', 'gurugram',
@@ -233,25 +234,33 @@ def fetch_remoteok():
 
 
 def fetch_remotive():
-    """Fetch jobs from Remotive API."""
+    """Fetch jobs from Remotive API filtered by relevant keywords."""
     jobs = []
+    seen_urls = set()
+    queries = ['java', 'backend engineer', 'tech lead', 'ai engineer', 'llm', 'genai', 'software engineer java']
     try:
-        resp = requests.get(
-            'https://remotive.com/api/remote-jobs',
-            timeout=15,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        for item in data.get('jobs', []):
-            jobs.append({
-                'company': item.get('company_name', ''),
-                'title': item.get('title', ''),
-                'url': item.get('url', ''),
-                'source': 'Remotive',
-                'location': item.get('candidate_required_location', 'Remote'),
-                'tags': item.get('category', ''),
-                'posted_date': item.get('publication_date', '')[:10],
-            })
+        for query in queries:
+            resp = requests.get(
+                'https://remotive.com/api/remote-jobs',
+                params={'search': query, 'limit': 20},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            for item in data.get('jobs', []):
+                url = item.get('url', '')
+                if url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                jobs.append({
+                    'company': item.get('company_name', ''),
+                    'title': item.get('title', ''),
+                    'url': url,
+                    'source': 'Remotive',
+                    'location': item.get('candidate_required_location', 'Remote'),
+                    'tags': item.get('category', ''),
+                    'posted_date': item.get('publication_date', '')[:10],
+                })
         print(f"  Remotive: {len(jobs)} jobs fetched")
     except Exception as e:
         print(f"  Remotive error: {e}")
@@ -295,8 +304,26 @@ def fetch_arbeitnow():
     return jobs
 
 
+def _fetch_jobicy_remote_from(url):
+    """Fetch a Jobicy job page and return the 'Remote from' country (e.g. 'USA', 'Worldwide').
+    Returns empty string on failure."""
+    try:
+        resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+        if resp.status_code != 200:
+            return ''
+        m = re.search(r'<dt>Remote from</dt><dd><a[^>]*>([^<]+)</a>', resp.text)
+        return m.group(1).strip() if m else ''
+    except Exception:
+        return ''
+
+
 def fetch_jobicy():
-    """Fetch jobs from Jobicy RSS feed (remote tech jobs)."""
+    """Fetch jobs from Jobicy RSS feed (remote tech jobs).
+
+    The RSS <region> field only says 'Remote' without a country. We fetch each
+    job page to read the 'Remote from [country]' field shown in the sidebar,
+    and use that as the location so the EMEA filter can work correctly.
+    """
     jobs = []
     try:
         resp = requests.get(
@@ -312,20 +339,34 @@ def fetch_jobicy():
             posted = ''
             if pub_date:
                 try:
-                    # Jobicy uses DD.MM.YYYY format
                     posted = datetime.strptime(pub_date.strip(), '%d.%m.%Y').strftime('%Y-%m-%d')
                 except Exception:
                     posted = pub_date[:10]
 
-            jobs.append({
+            job_url = item.findtext('link', '')
+            remote_from = _fetch_jobicy_remote_from(job_url) if job_url else ''
+            location = f'Remote from {remote_from}' if remote_from else item.findtext('region', 'Remote')
+            time.sleep(0.5)
+
+            # Tag non-priority remote_from countries for deprioritization
+            _priority_remote_from = {'', 'france', 'worldwide', 'anywhere', 'anywhere in the world',
+                                     'europe', 'emea', 'world', 'global', 'eu'}
+            rf_lower = remote_from.lower().strip()
+            _depriority = remote_from != '' and rf_lower not in _priority_remote_from
+
+            entry = {
                 'company': unescape(item.findtext('company', '')),
                 'title': unescape(item.findtext('name', '')),
-                'url': item.findtext('link', ''),
+                'url': job_url,
                 'source': 'Jobicy',
-                'location': item.findtext('region', 'Remote'),
+                'location': location,
                 'tags': item.findtext('jobtype', ''),
                 'posted_date': posted,
-            })
+            }
+            if _depriority:
+                entry['_depriority'] = True
+                entry['location_note'] = f'⚠️ Remote from {remote_from} only'
+            jobs.append(entry)
         print(f"  Jobicy: {len(jobs)} jobs fetched")
     except Exception as e:
         print(f"  Jobicy error: {e}")
@@ -808,7 +849,7 @@ def fetch_wttj_remote():
         for query in queries:
             try:
                 payload = {
-                    'params': f'query={query}&hitsPerPage=30&facetFilters=[["remote:fulltime","remote:partial"]]'
+                    'params': f'query={query}&hitsPerPage=30&facetFilters=[["remote:fulltime"]]'
                 }
                 resp = requests.post(url, headers=headers, json=payload, timeout=15)
                 if resp.status_code != 200:
@@ -1114,7 +1155,7 @@ EMEA_SIGNALS = [
     'romania', 'hungary', 'greece', 'finland', 'croatia',
     'luxembourg', 'berlin', 'amsterdam', 'barcelona', 'munich',
     'dublin', 'lisbon', 'warsaw', 'prague', 'vienna', 'brussels',
-    'gmt', 'cet', 'cest', 'utc+1', 'utc+2',
+    'gmt', 'cet', 'cest', 'bst', 'cest/edt', 'utc+1', 'utc+2',
 ]
 
 
@@ -1170,10 +1211,21 @@ def filter_jobs(jobs):
             continue
 
         # Strictly exclude jobs only targeting excluded regions
-        # (skip for EMEA-searched sources — they were fetched with EMEA keywords)
+        # (skip for EMEA-searched sources and Jobicy — Jobicy uses custom depriority logic)
         loc_tags = f"{location_lower} {tags_lower}"
-        if job.get('source') not in EMEA_SEARCHED_SOURCES:
+        if job.get('source') not in EMEA_SEARCHED_SOURCES and job.get('source') != 'Jobicy':
             if any(ex in loc_tags for ex in LOCATION_EXCLUDE):
+                continue
+
+        # Drop LinkedIn jobs where location is India unless they have an explicit CET/Europe/global signal
+        # LinkedIn Global India jobs that passed EMEA description check have tags='EMEA-verified'
+        if job.get('source', '').startswith('LinkedIn') and 'india' in loc_tags:
+            _india_keep = [
+                'emea-verified', 'emea', 'europe', 'cet', 'cest',
+                'utc+1', 'utc+2', 'gmt+1', 'gmt+2',
+                'anywhere', 'worldwide', 'global',
+            ]
+            if not any(s in loc_tags for s in _india_keep):
                 continue
 
         # Exclude US flag emoji
@@ -1218,7 +1270,9 @@ def filter_jobs(jobs):
 
 
 def get_location_tier(job):
-    """Return location priority tier (0=Paris, 1=France, 2=EMEA/CET, 3=UK, 4=global, 5=India, 6=other)."""
+    """Return location priority tier (0=Paris, 1=France, 2=EMEA/CET, 3=UK, 4=global, 5=India, 6=other, 7=non-priority remote_from)."""
+    if job.get('_depriority'):
+        return 7
     loc = job['location'].lower()
     for keywords, tier in LOCATION_PRIORITY:
         if any(kw in loc for kw in keywords):
@@ -1386,7 +1440,7 @@ def dump_to_excel(jobs):
 
 # ============= HTML EMAIL =============
 
-TIER_LABELS = {0: 'Paris', 1: 'France', 2: 'EMEA / CET', 3: 'UK', 4: 'Global / Remote', 5: 'India (IST — Remote-friendly)', 6: 'Other'}
+TIER_LABELS = {0: 'Paris', 1: 'France', 2: 'EMEA / CET', 3: 'UK', 4: 'Global / Remote', 5: 'India (IST — Remote-friendly)', 6: 'Other', 7: 'Other Regions (non-priority remote_from)'}
 
 def build_html(jobs, new_count=0, total_unchanged=False):
     """Build styled HTML email with job listings grouped by location tier."""
@@ -1437,7 +1491,7 @@ def build_html(jobs, new_count=0, total_unchanged=False):
     if not jobs:
         rows_html = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#7f8c8d;">No matching remote roles found this run.</td></tr>\n'
 
-    sources = 'RemoteOK, Remotive, WWR, Jobicy, LinkedIn FR, LinkedIn Global, Bluedoor'
+    sources = 'RemoteOK, Remotive, WWR, Jobicy, LinkedIn FR, LinkedIn Global, WTTJ, Hellowork, BuiltIn, Bluedoor'
     html = f"""
     <html>
     <head>
@@ -1508,6 +1562,112 @@ def send_email(html_content):
         return False
 
 
+def fetch_builtin_remote():
+    """Fetch remote tech jobs from BuiltIn's remote jobs page.
+
+    BuiltIn is a tech-focused job board with good EU remote coverage.
+    Scrapes the remote search page for backend/Java/AI keywords, then fetches
+    each job detail page for company name and structured location data.
+    Only keeps jobs with an EMEA-compatible location signal.
+    """
+    jobs = []
+    seen = set()
+    queries = ['java backend', 'senior java', 'backend engineer', 'tech lead java',
+               'genai engineer', 'llm engineer', 'ai engineer']
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+    }
+    emea_signals = [
+        'france', 'paris', 'remote', 'emea', 'europe', 'uk', 'germany',
+        'netherlands', 'ireland', 'spain', 'portugal', 'poland', 'sweden',
+        'anywhere', 'worldwide', 'global', 'london', 'berlin', 'amsterdam',
+    ]
+
+    for query in queries:
+        try:
+            resp = requests.get(
+                'https://builtin.com/jobs/remote',
+                params={'search': query},
+                headers=headers,
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                continue
+
+            slugs = re.findall(r'href="(/job/[^"?#]+)"', resp.text)
+            for slug in slugs:
+                job_url = f'https://builtin.com{slug}'
+                if job_url in seen:
+                    continue
+                seen.add(job_url)
+
+                try:
+                    detail = requests.get(job_url, headers=headers, timeout=10)
+                    if detail.status_code != 200:
+                        continue
+                    html = detail.text
+
+                    # Company from JSON-LD or og:site_name
+                    company = ''
+                    m = re.search(r'"hiringOrganization"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]+)"', html)
+                    if m:
+                        company = m.group(1).strip()
+                    if not company:
+                        m = re.search(r'<title>[^|<]*\|\s*([^|<]+?)\s*(?:\||<)', html)
+                        if m:
+                            company = m.group(1).strip()
+
+                    # Title from JSON-LD
+                    title = ''
+                    m = re.search(r'"title"\s*:\s*"([^"]+)"', html)
+                    if m:
+                        title = m.group(1).strip()
+                    if not title:
+                        title_part = slug.replace('/job/', '').rsplit('/', 1)[0]
+                        title = title_part.replace('-', ' ').title()
+
+                    # Location from JSON-LD jobLocation
+                    location = ''
+                    m = re.search(r'"jobLocation"[^}]*"addressLocality"\s*:\s*"([^"]+)"', html)
+                    if m:
+                        location = m.group(1).strip()
+                    if not location:
+                        m = re.search(r'"addressCountry"\s*:\s*"([^"]+)"', html)
+                        if m:
+                            location = m.group(1).strip()
+                    if not location:
+                        m = re.search(r'"@type"\s*:\s*"Place"[^}]*"name"\s*:\s*"([^"]+)"', html)
+                        if m:
+                            location = m.group(1).strip()
+                    if not location:
+                        location = 'Remote'
+
+                    loc_lower = location.lower()
+                    if not any(s in loc_lower for s in emea_signals):
+                        continue
+
+                    jobs.append({
+                        'company': company,
+                        'title': title,
+                        'url': job_url,
+                        'source': 'BuiltIn',
+                        'location': location,
+                        'tags': 'remote',
+                        'posted_date': datetime.now().strftime('%Y-%m-%d'),
+                    })
+                    time.sleep(0.3)
+
+                except Exception:
+                    continue
+
+        except Exception as e:
+            print(f'  BuiltIn remote error ({query}): {e}')
+
+    print(f'  BuiltIn remote: {len(jobs)} jobs')
+    return jobs
+
+
 # ============= MAIN =============
 
 def main(no_save=False):
@@ -1530,6 +1690,7 @@ def main(no_save=False):
     all_jobs.extend(fetch_wttj_remote())
     all_jobs.extend(fetch_hellowork())
     all_jobs.extend(fetch_talentio())
+    all_jobs.extend(fetch_builtin_remote())
     if BLUEDOOR_ENABLED:
         all_jobs.extend(fetch_bluedoor())
     else:
@@ -1562,6 +1723,9 @@ def main(no_save=False):
             job['fit'] = fit
         scored = sum(1 for f in fit_scores if f)
         print(f"  Fit scores added: {scored}/{len(sorted_jobs)}")
+        import math
+        gemini_calls = math.ceil(len(sorted_jobs) / 15)
+        print(f"  Gemini quota used: ~{gemini_calls}/20 calls today — ~{20 - gemini_calls} remaining for Fit-Check service")
 
     # Compare with previous run to detect new jobs
     previous_keys = load_previous_jobs()
