@@ -29,6 +29,25 @@ All data shown below is fictional.
 
 Hot Jobs grouped by role category with clickable links, coloured source badges (🔵 LI / 🟢 WTTJ / 🟠 BuiltIn), and a **Fit %** badge per job scored against your resume. Below the Hot Jobs section, tracker companies are grouped by status with HR contacts and quick search links.
 
+**Hot Jobs slot-filling logic** (per category, runs daily at 11am):
+
+| Category | Slots |
+|---|---|
+| Senior Java | 8 |
+| Backend Java | 8 |
+| Tech Lead / Lead Developer | 8 |
+| AI / GenAI Engineer | 8 |
+| Staff / Principal Engineer | 8 |
+| Assistant Project Manager | 5 |
+
+Slots are filled in two stages:
+1. **Paris-first** — Paris-located jobs fill all available slots before any non-Paris (France, EMEA) jobs are considered. Non-Paris jobs only backfill leftover slots.
+2. **Source waterfall within each location group** — within Paris and within non-Paris, sources are prioritised: WTTJ → BuiltIn → LinkedIn. Each source gets **1 guaranteed slot** (if it has results), then remaining slots go to WTTJ first, BuiltIn second, LinkedIn last.
+
+**Auto-expiry check** — before keeping an existing hot job, the pipeline fetches its listing page and checks for known "no longer available" phrases (`Cette offre n'est plus disponible`, `This offer is no longer available`, etc.). Expired listings are automatically dropped and their slot is backfilled with a fresh job.
+
+**Title exclusion list** — the following role types are filtered out globally across all categories regardless of search query match: internship/stage/alternance, presales, solutions engineer, embedded/embarqué, forward deployed, operational research. Edit the `elif any(kw in title_lower ...)` check in `fetch_hot_jobs()` to add more.
+
 ### Remote Job Scanner (every 2 days, 12:00 PM)
 ![Remote Email Sample](sample_remote_email.png)
 
