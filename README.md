@@ -8,7 +8,7 @@ An end-to-end automated job search pipeline that handles everything from finding
 
 - **Daily Email Reports** - Styled HTML emails at 11:00 AM CET with companies grouped by role and status
 - **Hot Jobs Section** - Sticky listings from **LinkedIn + Welcome to the Jungle + BuiltIn** (fully configurable role categories, 5–8 slots per category) that persist until you add a company to your tracker, then backfill just that slot — 1 slot per category is always reserved for BuiltIn, with automatic fallback to WTTJ/LinkedIn if none found — each job shows a coloured source badge (🔵 LI / 🟢 WTTJ / 🟠 BuiltIn) — **WTTJ is prioritised first** within each location tier (hitsPerPage 30, source priority sort)
-- **Remote Job Scanner** - Fetches from RemoteOK, Remotive, We Work Remotely, Jobicy, LinkedIn (France/Global), and **Bluedoor** (free public ATS-aggregator API — Greenhouse/Lever/Ashby/Workday + 27 more) every 2 days, filters for EMEA-compatible roles. Bluedoor jobs are scoped to EMEA countries at the source, then **description-verified** (drops hard US-only roles, and annotates when a job's real scope is broader than its country tag, e.g. *"Tagged Poland → actually global remote"*)
+- **Remote Job Scanner** - Fetches from RemoteOK, Remotive, We Work Remotely, Jobicy, LinkedIn (France/Global), **BuiltIn** (remote-filtered tech jobs, EMEA location verified), WTTJ (full-remote only), Hellowork, and **Bluedoor** (free public ATS-aggregator API — Greenhouse/Lever/Ashby/Workday + 27 more) every 2 days, filters for EMEA-compatible roles. Bluedoor jobs are scoped to EMEA countries at the source, then **description-verified** (drops hard US-only roles, and annotates when a job's real scope is broader than its country tag, e.g. *"Tagged Poland → actually global remote"*)
 - **Fit Scoring** - Daily **Hot Jobs** and **remote** listings get a Gemini-scored fit badge (Strong/Good/Moderate/Weak %) against your resume, shown inline in both emails. Scored in chunked batches (15/call) to avoid truncation; if Gemini is rate-limited the email still sends and the log warns clearly rather than silently shipping a blank column. Also available on-demand for any single posting via the `fit-check` skill.
 - **Resume Tailor** - Per-company tailored resumes using Gemini 2.5 Flash (free tier) — never fabricates, only reorders and surfaces existing skills
 - **Cover Letter Generator** - Tailored cover letters per job posting using a fixed personal template + Gemini-generated matched-skills and gap-bridge paragraphs. Saves DOCX to `cover_letters/`. Invoke via `/cover-letter <url>` or natural language
@@ -51,7 +51,7 @@ Slots are filled in two stages:
 ### Remote Job Scanner (every 2 days, 12:00 PM)
 ![Remote Email Sample](sample_remote_email.png)
 
-EMEA-compatible remote roles from RemoteOK, Remotive, WWR, Jobicy, LinkedIn (France/Global) and **Bluedoor**, sorted by location tier with a **Fit %** badge per job. Bluedoor jobs are EMEA description-verified — note the *"Tagged Poland → actually global remote"* annotation, which flags when a job's true scope is broader than its country tag so you don't have to open the link.
+EMEA-compatible remote roles from RemoteOK, Remotive, WWR, Jobicy, LinkedIn (France/Global), **BuiltIn** (remote tech jobs, EMEA-verified), WTTJ (full-remote only), Hellowork, and **Bluedoor**, sorted by location tier with a **Fit %** badge per job. Bluedoor jobs are EMEA description-verified — note the *"Tagged Poland → actually global remote"* annotation, which flags when a job's true scope is broader than its country tag so you don't have to open the link.
 
 ## What You Get
 
@@ -483,7 +483,10 @@ Excel Tracker (List.xlsx)
             │       │
             │       ├── RemoteOK + Remotive + WWR + Jobicy APIs
             │       ├── LinkedIn France (remote f_WT=2 filter)
-            │       ├── LinkedIn Global (EMEA description verification)
+            │       ├── LinkedIn Global (EMEA description verification, India dropped unless EMEA-verified)
+            │       ├── BuiltIn (remote page, EMEA location check)
+            │       ├── WTTJ (full-remote only, remote:fulltime filter)
+            │       ├── Hellowork (French tech board, télétravail filter)
             │       ├── Bluedoor (ATS-aggregator API, EMEA-scoped + description-verified)
             │       ├── fit_scorer.py ──→ Gemini fit badges (chunked 15/call, thinking disabled, graceful on rate-limit)
             │       └── rejected_remote.json (filtered out before email/Excel)
@@ -553,8 +556,12 @@ claude-job-agent/
 6. **Resume Tailor** - Tailored DOCX resumes via Gemini AI for companies with fetchable job links
 
 ### Remote Job Scanner (every 2 days, 12:00 PM)
-1. **Fetch** - Pulls listings from RemoteOK, Remotive, WWR, Jobicy, LinkedIn France, LinkedIn Global (India/Boston/NY), and Bluedoor (EMEA countries, remote-only)
-2. **Filter** - Matches role keywords + location-compatible positions (configurable in `config.py`)
+1. **Fetch** - Pulls listings from RemoteOK, Remotive, WWR, Jobicy, LinkedIn France, LinkedIn Global (Boston/NY — India searches disabled), BuiltIn (remote page, EMEA-verified), WTTJ (full-remote only), Hellowork, and Bluedoor (EMEA countries, remote-only)
+2. **Filter** - Matches role keywords + location-compatible positions (configurable in `config.py`). Active filters:
+   - **Role exclusions**: internship keywords (`stage`, `stagiaire`, `alternance`, `alternant`, `intern`, `apprentice`), frontend, devops, data science, PHP, .NET, full-stack, and others
+   - **WTTJ**: full-remote only (`remote:fulltime` — hybrid/partial excluded)
+   - **LinkedIn India jobs**: dropped unless location/tags contain an explicit EMEA/CET/global signal (e.g. `emea-verified`, `cet`, `anywhere`, `worldwide`)
+   - **Jobicy**: non-priority `remote_from` countries (not France/Europe/EMEA/Worldwide/Anywhere) are kept but sorted to the bottom of the email with a note showing the country
 3. **Dedup** - Removes duplicates by company+title across sources
 4. **EMEA Verification** - For LinkedIn Global jobs, fetches each job's full description and checks for explicit EMEA timezone signals (`emea`, `cet`, `work from anywhere`, `any timezone`, etc.). Rejects US-only or no-timezone-info jobs. **Bluedoor** survivors get the same treatment via `?include=description`, then each is classified by *real* workable scope (broad/home signals always win, so EMEA-workable roles are never lost):
    - 🌍 **Global remote** / 🇪🇺 **EU-EMEA remote** → kept and labelled (e.g. *"Tagged Poland → actually global remote"*)
@@ -772,7 +779,7 @@ For issues or questions:
 
 ---
 
-**Built with Claude Code** | **Last Updated:** 2026-04-20
+**Built with Claude Code** | **Last Updated:** 2026-08-20
 
 ---
 

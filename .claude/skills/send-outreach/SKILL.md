@@ -68,10 +68,12 @@ Add `--cc "[CC_EMAIL]"` if a CC was provided.
 
 ## Weekly draft mode — "send this week's outreach emails"
 
-When triggered by "send this week's outreach emails", "send weekly outreach", or "send the drafted emails":
+Per user instruction (2026-08-17): drafts to **known/verified HR contacts** are sent automatically, no per-email confirmation. This applies to drafts produced by the weekly-hr-search routine, and to any future "draft outreach then send" workflow unless the user says otherwise.
+
+When triggered by "send this week's outreach emails", "send weekly outreach", "send the drafted emails" — or automatically at the end of the weekly-hr-search routine right after drafts are written:
 
 ### Step 1 — Read saved drafts
-Check `C:\Users\mahas\Learnings\claude-job-agent\outreach_drafts\` for `*_draft.txt` files saved by the weekly-hr-search routine.
+Check `C:\Users\mahas\Learnings\claude-job-agent\outreach_drafts\` for `*_draft.txt` files.
 
 Parse each file:
 ```
@@ -81,26 +83,25 @@ SUBJECT: {subject}
 {body}
 ```
 
-### Step 2 — Send one by one with confirmation
-For each draft file, show the user:
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-COMPANY: {company}
-TO: {email}
-SUBJECT: {subject}
----
-{body}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Send this one? (yes / no / stop)
-```
+### Step 2 — Send automatically
+For each draft, send via `send_outreach_emails.py` (or an equivalent direct SMTP send using `cold_outreach_template.txt` + the tracker role lookup) — no confirmation prompt, no dry-run-to-self step.
 
-Wait for explicit user confirmation before sending each one.
-- **yes** → send via `send_outreach_emails.py`, then move to next draft
-- **no** → skip this draft, move to next
-- **stop** → stop processing remaining drafts
+Do NOT send, and instead note as skipped in the receipt (see Step 4), if:
+- The contact's email is **flagged undeliverable/invalid by Hunter (or any verifier)**. Confirmed 2026-08-17: `cecile.grondin@netatmo.com` was flagged "undeliverable" by Hunter, sent anyway, and did in fact bounce/get flagged by Netatmo's mail server — so trust the verifier's "invalid/undeliverable" status and skip rather than guess-and-send.
+- A guessed email has **no verification at all** (Hunter wasn't able to check it, e.g. accept-all domain) — still send it, but flag it clearly as unverified in the receipt so the user knows it's a lower-confidence guess. This is different from a confirmed-bad flag above.
+- The job listing URL returns 404 or any "no longer available" signal — skip, do not send, note it in the receipt.
 
 ### Step 3 — Clean up sent drafts
-After user confirms a draft was sent successfully, delete that `_draft.txt` file so it doesn't appear again next week.
+After a draft sends successfully, delete that `_draft.txt` file so it doesn't appear again next week.
+
+### Step 4 — Send a receipt email (mandatory, every run)
+After sending (or attempting) all drafts, send a plain-text receipt to `mahashwetha91@gmail.com` listing, for every email actually sent:
+- Company name
+- Role
+- HR contact name + email sent to
+- Any caveat (e.g. "unverified email, watch for bounce")
+
+And for anything skipped: company, reason skipped.
 
 ### Fallback — no drafts folder or empty
 If `outreach_drafts/` doesn't exist or has no draft files, fall back to the standard single-email flow and ask the user for `--name`, `--email`, `--company`.
