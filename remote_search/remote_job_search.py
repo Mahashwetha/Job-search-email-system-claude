@@ -1491,7 +1491,7 @@ def build_html(jobs, new_count=0, total_unchanged=False):
     if not jobs:
         rows_html = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#7f8c8d;">No matching remote roles found this run.</td></tr>\n'
 
-    sources = 'RemoteOK, Remotive, WWR, Jobicy, LinkedIn FR, LinkedIn Global, WTTJ, Hellowork, BuiltIn, Bluedoor'
+    sources = 'RemoteOK, Remotive, WWR, Jobicy, LinkedIn FR, LinkedIn Global, WTTJ, Hellowork, Bluedoor'
     html = f"""
     <html>
     <head>
@@ -1690,7 +1690,8 @@ def main(no_save=False):
     all_jobs.extend(fetch_wttj_remote())
     all_jobs.extend(fetch_hellowork())
     all_jobs.extend(fetch_talentio())
-    all_jobs.extend(fetch_builtin_remote())
+    # BuiltIn is a SPA — HTML scraping returns <2 jobs; disabled until a proper API is found
+    # all_jobs.extend(fetch_builtin_remote())
     if BLUEDOOR_ENABLED:
         all_jobs.extend(fetch_bluedoor())
     else:
