@@ -2,12 +2,12 @@
 
 An end-to-end automated job search pipeline that handles everything from finding opportunities to preparing applications. Sends daily styled HTML email digests from your Excel tracker, scans remote job APIs for EMEA-compatible roles, tailors resumes per company using Gemini AI, sends HR outreach emails with attachments, and drafts LinkedIn outreach messages — all on autopilot via Windows Task Scheduler.
 
-**Heavily driven by Claude Code Skills** — 11 plain-language voice commands cover the entire workflow: adding jobs, rejecting, opening hot jobs, emailing HR, tailoring resumes, generating cover letters, fit-checking a posting, and more. No scripts to remember, no flags to type.
+**Heavily driven by Claude Code Skills** — 12 plain-language voice commands cover the entire workflow: adding jobs, rejecting, opening hot jobs, emailing HR, tailoring resumes, generating cover letters, fit-checking a posting, and more. No scripts to remember, no flags to type.
 
 ## Features
 
 - **Daily Email Reports** - Styled HTML emails at 11:00 AM CET with companies grouped by role and status
-- **Hot Jobs Section** - Sticky listings from **LinkedIn + Welcome to the Jungle + BuiltIn** (fully configurable role categories, 5–8 slots per category) that persist until you add a company to your tracker, then backfill just that slot — 1 slot per category is always reserved for BuiltIn, with automatic fallback to WTTJ/LinkedIn if none found — each job shows a coloured source badge (🔵 LI / 🟢 WTTJ / 🟠 BuiltIn) — **WTTJ is prioritised first** within each location tier (hitsPerPage 30, source priority sort)
+- **Hot Jobs Section** - Sticky listings from **LinkedIn + Welcome to the Jungle + BuiltIn** (fully configurable role categories, 5–10 slots per category) that persist until you add a company to your tracker, then backfill just that slot — 1 slot per category is always reserved for BuiltIn, with automatic fallback to WTTJ/LinkedIn if none found — each job shows a coloured source badge (🔵 LI / 🟢 WTTJ / 🟠 BuiltIn) — **WTTJ is prioritised first** within each location tier (hitsPerPage 30, source priority sort)
 - **Remote Job Scanner** - Fetches from RemoteOK, Remotive, We Work Remotely, Jobicy, LinkedIn (France/Global), **BuiltIn** (remote-filtered tech jobs, EMEA location verified), WTTJ (full-remote only), Hellowork, and **Bluedoor** (free public ATS-aggregator API — Greenhouse/Lever/Ashby/Workday + 27 more) every 2 days, filters for EMEA-compatible roles. Bluedoor jobs are scoped to EMEA countries at the source, then **description-verified** (drops hard US-only roles, and annotates when a job's real scope is broader than its country tag, e.g. *"Tagged Poland → actually global remote"*)
 - **Fit Scoring** - Daily **Hot Jobs** and **remote** listings get a Gemini-scored fit badge (Strong/Good/Moderate/Weak %) against your resume, shown inline in both emails. Scored in chunked batches (15/call) to avoid truncation; if Gemini is rate-limited the email still sends and the log warns clearly rather than silently shipping a blank column. Also available on-demand for any single posting via the `fit-check` skill.
 - **Resume Tailor** - Per-company tailored resumes using Gemini 2.5 Flash (free tier) — never fabricates, only reorders and surfaces existing skills
@@ -33,11 +33,11 @@ Hot Jobs grouped by role category with clickable links, coloured source badges (
 
 | Category | Slots |
 |---|---|
-| Senior Java | 8 |
-| Backend Java | 8 |
-| Tech Lead / Lead Developer | 8 |
-| AI / GenAI Engineer | 8 |
-| Staff / Principal Engineer | 8 |
+| Senior Java | 10 |
+| Backend Java | 10 |
+| Tech Lead / Lead Developer | 10 |
+| AI / GenAI Engineer | 10 |
+| Staff / Principal Engineer | 10 |
 | Assistant Project Manager | 5 |
 
 Slots are filled in two stages:
@@ -425,7 +425,7 @@ python resume_tailor.py "https://company.workdayjobs.com/job/..." "Company Name"
 
 Skills are the **primary interface** for this project. Instead of remembering script names, paths, and flags, you just describe what you want in plain language — Claude picks the right skill and executes the full workflow.
 
-This project includes **10 skills** covering every stage of the job search:
+This project includes **12 skills** covering every stage of the job search:
 
 ### Tracker Management
 
