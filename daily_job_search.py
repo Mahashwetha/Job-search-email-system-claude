@@ -818,12 +818,12 @@ def fetch_hot_jobs(tracker):
             else:
                 kept.append(job)
 
-        max_slots = 5 if category == 'Assistant Project Manager' else 8
+        max_slots = 5 if category == 'Assistant Project Manager' else 10
 
-        # Always reserve 1 slot for BuiltIn — drop last non-BuiltIn job if all slots full
+        # Always reserve 1 slot for BuiltIn
         has_builtin = any(j.get('source') == 'BuiltIn' for j in kept)
         if not has_builtin and len(kept) >= max_slots:
-            kept = kept[:max_slots - 1]  # free up 1 slot for BuiltIn
+            kept = kept[:max_slots - 1]
         slots_needed = max_slots - len(kept)
 
         def _get_candidates(slots_needed):
@@ -882,20 +882,20 @@ def fetch_hot_jobs(tracker):
             return candidates
 
         if slots_needed > 0:
-            print(f"  [{category}] {len(kept)} kept, need {slots_needed} more - fetching LinkedIn + WTTJ + BuiltIn (1 slot reserved)...")
+            print(f"  [{category}] {len(kept)} kept, need {slots_needed} more - fetching LinkedIn + WTTJ + BuiltIn...")
             candidates = _get_candidates(slots_needed)
 
-            # Sort by location tier, then source priority (WTTJ before LinkedIn)
+            # Sort by location tier, then source priority
             SOURCE_PRIORITY = {'WTTJ': 0, 'LinkedIn': 1, 'BuiltIn': 2}
             candidates.sort(key=lambda j: (
                 get_hot_job_location_tier(j['location']),
                 SOURCE_PRIORITY.get(j.get('source', ''), 3),
             ))
 
-            # Promote 1 BuiltIn to front — if none found, all slots go to WTTJ/LinkedIn
-            # Fetch company name for each BuiltIn candidate and re-check tracker
+            # Promote 1 BuiltIn to front of queue
             builtin_candidates = [j for j in candidates if j.get('source') == 'BuiltIn']
             other_candidates   = [j for j in candidates if j.get('source') != 'BuiltIn']
+
             winner = None
             for bc in builtin_candidates:
                 if not bc.get('company'):
