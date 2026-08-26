@@ -91,7 +91,7 @@ PYTHON_SECONDARY_KEYWORDS = ['python']
 JAVA_BACKEND_SIGNALS = ['java', 'backend', 'back-end', 'back end', 'jvm', 'spring', 'microservices']
 
 # Sources that are inherently EU-focused (jobs from these pass without explicit EMEA location)
-EU_FOCUSED_SOURCES = []
+EU_FOCUSED_SOURCES = ['Arbeitnow']
 
 # Sources where "Remote" without region is common — allow if no US indicators found
 RELAXED_LOCATION_SOURCES = ['Jobicy']
@@ -311,8 +311,11 @@ def _fetch_jobicy_remote_from(url):
         resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
         if resp.status_code != 200:
             return ''
-        m = re.search(r'<dt>Remote from</dt><dd><a[^>]*>([^<]+)</a>', resp.text)
-        return m.group(1).strip() if m else ''
+        m = re.search(r'<dt>Remote from</dt><dd>(.*?)</dd>', resp.text, re.DOTALL)
+        if m:
+            countries = re.findall(r'>([^<]+)</a>', m.group(1))
+            return ', '.join(c.strip() for c in countries if c.strip()) if countries else ''
+        return ''
     except Exception:
         return ''
 
@@ -348,11 +351,13 @@ def fetch_jobicy():
             location = f'Remote from {remote_from}' if remote_from else item.findtext('region', 'Remote')
             time.sleep(0.5)
 
-            # Tag non-priority remote_from countries for deprioritization
+            # Skip jobs not open to EU/global applicants
             _priority_remote_from = {'', 'france', 'worldwide', 'anywhere', 'anywhere in the world',
                                      'europe', 'emea', 'world', 'global', 'eu'}
-            rf_lower = remote_from.lower().strip()
-            _depriority = remote_from != '' and rf_lower not in _priority_remote_from
+            rf_parts = [p.strip().lower() for p in remote_from.split(',')]
+            _is_priority = not remote_from or any(p in _priority_remote_from for p in rf_parts)
+            if not _is_priority:
+                continue
 
             entry = {
                 'company': unescape(item.findtext('company', '')),
@@ -363,9 +368,6 @@ def fetch_jobicy():
                 'tags': item.findtext('jobtype', ''),
                 'posted_date': posted,
             }
-            if _depriority:
-                entry['_depriority'] = True
-                entry['location_note'] = f'⚠️ Remote from {remote_from} only'
             jobs.append(entry)
         print(f"  Jobicy: {len(jobs)} jobs fetched")
     except Exception as e:
@@ -735,9 +737,21 @@ def fetch_hellowork():
 
                 # Extract location from aria-label: "à {city}, chez {company}"
                 loc_match = re.search(r'\bà (.+?), chez', aria)
-                location = loc_match.group(1).strip() if loc_match else 'France'
+                city = loc_match.group(1).strip() if loc_match else 'France'
                 remote_label = 'Full Remote' if 'total' in card_text.lower() else 'Hybrid Remote'
-                location = f'{location}, FR ({remote_label})'
+
+                # For hybrid roles, only keep Paris / Île-de-France area
+                _idf_keywords = ('paris', 'île-de-france', 'idf', 'hauts-de-seine',
+                                 'seine', 'val-de-marne', 'yvelines', 'essonne', 'marne',
+                                 'boulogne', 'issy', 'neuilly', 'levallois', 'puteaux',
+                                 'nanterre', 'versailles', 'créteil', 'vincennes',
+                                 'montreuil', 'saint-denis', 'clichy', 'courbevoie',
+                                 'la défense', 'suresnes', 'colombes', 'rueil')
+                if remote_label == 'Hybrid Remote' and city.lower() not in ('', 'france'):
+                    if not any(kw in city.lower() for kw in _idf_keywords):
+                        continue
+
+                location = f'{city}, FR ({remote_label})'
 
                 href = card.get('href', '')
                 job_url = f'https://www.hellowork.com{href}' if href.startswith('/') else href
@@ -945,12 +959,20 @@ def fetch_bluedoor():
                 if job_id in seen_ids:
                     continue
                 seen_ids.add(job_id)
+                company = _bluedoor_company_name(item)
+                # Skip junk entries: empty name, placeholder text, or hex-hash slugs
+                _junk = {'', 'unknown', 'job boards', 'recruiting', 'jobs', 'careers'}
+                if (not company or company.lower() in _junk
+                        or re.match(r'^[0-9a-f]{8}', company.lower())):
+                    continue
                 loc_parts = [item.get('city'), item.get('region'), item.get('country')]
+                # Strip Bluedoor "#XX" region-code artifacts (e.g. "Spain#SP" → "Spain")
+                loc_parts = [re.sub(r'#[A-Z]{2}(-[A-Z]{2})?', '', p).strip() for p in loc_parts if p]
                 location = ', '.join(p for p in loc_parts if p) or 'Remote'
                 workplace = item.get('workplace_type') or item.get('remote_policy') or ''
                 posted = (item.get('source_posted_at') or item.get('first_seen_at') or '')[:10]
                 jobs.append({
-                    'company': _bluedoor_company_name(item),
+                    'company': company,
                     'title': item.get('title', ''),
                     'url': item.get('apply_url') or item.get('source_url', ''),
                     'source': 'Bluedoor',
@@ -964,7 +986,7 @@ def fetch_bluedoor():
             cursor = (payload.get('meta') or {}).get('next_cursor')
             if not cursor:
                 break
-        time.sleep(0.3)
+        time.sleep(2.0)
 
     print(f"  Bluedoor: {len(jobs)} remote jobs fetched (pre-EMEA-verify)")
     return jobs
