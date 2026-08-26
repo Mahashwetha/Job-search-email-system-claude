@@ -835,8 +835,7 @@ def fetch_hot_jobs(tracker):
                 global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
             elif get_hot_job_location_tier(job.get('location', '')) > 0:
                 print(f"  [{category}] Removed '{job['company']}' (non-Paris/IDF location: {job.get('location', '?')})")
-                global_urls.discard(job['url'])
-                global_keys.discard((job['company'].lower().strip(), job['title'].lower().strip()))
+                # Do NOT discard from global_urls/keys — keeps job "seen" so it can't re-enter via refill
             else:
                 kept.append(job)
 
