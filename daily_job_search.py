@@ -885,6 +885,9 @@ def fetch_hot_jobs(tracker):
             print(f"  [{category}] {len(kept)} kept, need {slots_needed} more - fetching LinkedIn + WTTJ + BuiltIn...")
             candidates = _get_candidates(slots_needed)
 
+            # Drop non-France/Paris candidates (EMEA/Spain/Other leaked from LinkedIn)
+            candidates = [j for j in candidates if get_hot_job_location_tier(j['location']) <= 1]
+
             # Sort by location tier, then source priority
             SOURCE_PRIORITY = {'WTTJ': 0, 'LinkedIn': 1, 'BuiltIn': 2}
             candidates.sort(key=lambda j: (
