@@ -432,38 +432,50 @@ HOT_JOB_DESC_REQUIRED = {
 }
 
 
-def fetch_linkedin_jobs(keywords, location):
-    """Fetch jobs from LinkedIn guest API for a single query."""
+def fetch_linkedin_jobs(keywords, location, max_pages=3):
+    """Fetch jobs from LinkedIn guest API, paginating up to max_pages (25 results each)."""
     jobs = []
-    try:
-        url = (
-            f'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search'
-            f'?keywords={keywords}&location={location.replace(" ", "+")}&start=0'
-        )
-        resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
-        if resp.status_code != 200:
-            return jobs
+    seen_urls = set()
+    for page in range(max_pages):
+        start = page * 25
+        try:
+            url = (
+                f'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search'
+                f'?keywords={keywords}&location={location.replace(" ", "+")}&start={start}'
+            )
+            resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
+            if resp.status_code != 200:
+                break
 
-        titles = re.findall(r'base-search-card__title[^>]*>([^<]+)<', resp.text)
-        companies = re.findall(r'base-search-card__subtitle[^>]*>[^<]*<a[^>]*>([^<]+)<', resp.text)
-        locations = re.findall(r'job-search-card__location[^>]*>([^<]+)<', resp.text)
-        links = re.findall(r'href="(https://(?:fr|www)\.linkedin\.com/jobs/view/[^"]+)"', resp.text)
+            titles = re.findall(r'base-search-card__title[^>]*>([^<]+)<', resp.text)
+            companies = re.findall(r'base-search-card__subtitle[^>]*>[^<]*<a[^>]*>([^<]+)<', resp.text)
+            locations = re.findall(r'job-search-card__location[^>]*>([^<]+)<', resp.text)
+            links = re.findall(r'href="(https://(?:fr|www)\.linkedin\.com/jobs/view/[^"]+)"', resp.text)
+            date_elements = re.findall(r'job-search-card__listdate[^>]*datetime="([^"]+)"[^>]*>\s*([^<]*?)\s*<', resp.text)
 
-        date_elements = re.findall(r'job-search-card__listdate[^>]*datetime="([^"]+)"[^>]*>\s*([^<]*?)\s*<', resp.text)
-        for i in range(min(len(titles), len(companies), len(locations), len(links))):
-            clean_url = unescape(links[i]).split('?')[0]
-            posted_date = date_elements[i][0][:10] if i < len(date_elements) else ''
-            is_reposted = date_elements[i][1].strip().lower() == 'reposted' if i < len(date_elements) else False
-            jobs.append({
-                'company': unescape(companies[i].strip()),
-                'title': unescape(titles[i].strip()),
-                'url': clean_url,
-                'location': unescape(locations[i].strip()),
-                'posted_date': posted_date,
-                'reposted': is_reposted,
-            })
-    except Exception as e:
-        print(f"  LinkedIn hot jobs error ({keywords}, {location}): {e}")
+            page_count = min(len(titles), len(companies), len(locations), len(links))
+            if page_count == 0:
+                break  # no more results
+            for i in range(page_count):
+                clean_url = unescape(links[i]).split('?')[0]
+                if clean_url in seen_urls:
+                    continue
+                seen_urls.add(clean_url)
+                posted_date = date_elements[i][0][:10] if i < len(date_elements) else ''
+                is_reposted = date_elements[i][1].strip().lower() == 'reposted' if i < len(date_elements) else False
+                jobs.append({
+                    'company': unescape(companies[i].strip()),
+                    'title': unescape(titles[i].strip()),
+                    'url': clean_url,
+                    'location': unescape(locations[i].strip()),
+                    'posted_date': posted_date,
+                    'reposted': is_reposted,
+                })
+            if page > 0:
+                time.sleep(1)
+        except Exception as e:
+            print(f"  LinkedIn hot jobs error ({keywords}, {location}, start={start}): {e}")
+            break
     return jobs
 
 
@@ -487,67 +499,77 @@ def fetch_linkedin_job_description(url):
         return ''
 
 
-def fetch_wttj_jobs(query):
+def fetch_wttj_jobs(query, max_pages=3):
     """Fetch jobs from Welcome to the Jungle via Algolia search backend (public read-only key).
     Uses the French index (wttj_jobs_production_fr) — all results are France-based.
+    Paginates up to max_pages (30 results each).
     """
     jobs = []
-    try:
-        url = 'https://CSEKHVMS53-dsn.algolia.net/1/indexes/wttj_jobs_production_fr/query'
-        headers = {
-            'X-Algolia-Application-Id': 'CSEKHVMS53',
-            'X-Algolia-API-Key': '4bd8f6215d0cc52b26430765769e65a0',
-            'Content-Type': 'application/json',
-            'Origin': 'https://www.welcometothejungle.com',
-            'Referer': 'https://www.welcometothejungle.com/',
-            'User-Agent': 'Mozilla/5.0',
-        }
-        clean_query = query.replace('+', ' ')
-        payload = {'params': f'query={clean_query}&hitsPerPage=30&filters=offices.country_code%3AFR'}
-        resp = requests.post(url, headers=headers, json=payload, timeout=15)
-        if resp.status_code != 200:
-            return jobs
-        data = resp.json()
-        for hit in data.get('hits', []):
-            title = hit.get('name', '')
-            org = hit.get('organization', {}) or {}
-            company = org.get('name', '')
-            org_slug = org.get('slug', '')
-            slug = hit.get('slug', '')
-            # offices is a list; take first entry for location
-            offices = hit.get('offices') or []
-            if offices:
-                city = offices[0].get('city', '')
-                country = offices[0].get('country_code', 'FR')
-            else:
-                city, country = '', 'FR'
-            remote = hit.get('remote', 'no')
-            # Only keep France-based jobs or fully-remote roles
-            if country != 'FR' and remote != 'fulltime':
-                continue
-            if org_slug and slug:
-                job_url = f'https://www.welcometothejungle.com/fr/companies/{org_slug}/jobs/{slug}'
-            else:
-                continue
-            location = f'{city}, {country}' if city else country
-            pub_at = hit.get('published_at', '')
-            if isinstance(pub_at, (int, float)) and pub_at:
-                posted_date = datetime.fromtimestamp(pub_at).strftime('%Y-%m-%d')
-            elif isinstance(pub_at, str):
-                posted_date = pub_at[:10]
-            else:
-                posted_date = ''
-            if title and company:
-                jobs.append({
-                    'company': company.strip(),
-                    'title': title.strip(),
-                    'url': job_url,
-                    'location': location.strip(),
-                    'source': 'WTTJ',
-                    'posted_date': posted_date,
-                })
-    except Exception as e:
-        print(f'  WTTJ hot jobs error ({query}): {e}')
+    seen_urls = set()
+    url = 'https://CSEKHVMS53-dsn.algolia.net/1/indexes/wttj_jobs_production_fr/query'
+    headers = {
+        'X-Algolia-Application-Id': 'CSEKHVMS53',
+        'X-Algolia-API-Key': '4bd8f6215d0cc52b26430765769e65a0',
+        'Content-Type': 'application/json',
+        'Origin': 'https://www.welcometothejungle.com',
+        'Referer': 'https://www.welcometothejungle.com/',
+        'User-Agent': 'Mozilla/5.0',
+    }
+    clean_query = query.replace('+', ' ')
+    for page in range(max_pages):
+        try:
+            payload = {'params': f'query={clean_query}&hitsPerPage=30&page={page}&filters=offices.country_code%3AFR'}
+            resp = requests.post(url, headers=headers, json=payload, timeout=15)
+            if resp.status_code != 200:
+                break
+            data = resp.json()
+            hits = data.get('hits', [])
+            if not hits:
+                break
+            for hit in hits:
+                title = hit.get('name', '')
+                org = hit.get('organization', {}) or {}
+                company = org.get('name', '')
+                org_slug = org.get('slug', '')
+                slug = hit.get('slug', '')
+                offices = hit.get('offices') or []
+                if offices:
+                    city = offices[0].get('city', '')
+                    country = offices[0].get('country_code', 'FR')
+                else:
+                    city, country = '', 'FR'
+                remote = hit.get('remote', 'no')
+                if country != 'FR' and remote != 'fulltime':
+                    continue
+                if org_slug and slug:
+                    job_url = f'https://www.welcometothejungle.com/fr/companies/{org_slug}/jobs/{slug}'
+                else:
+                    continue
+                if job_url in seen_urls:
+                    continue
+                seen_urls.add(job_url)
+                location = f'{city}, {country}' if city else country
+                pub_at = hit.get('published_at', '')
+                if isinstance(pub_at, (int, float)) and pub_at:
+                    posted_date = datetime.fromtimestamp(pub_at).strftime('%Y-%m-%d')
+                elif isinstance(pub_at, str):
+                    posted_date = pub_at[:10]
+                else:
+                    posted_date = ''
+                if title and company:
+                    jobs.append({
+                        'company': company.strip(),
+                        'title': title.strip(),
+                        'url': job_url,
+                        'location': location.strip(),
+                        'source': 'WTTJ',
+                        'posted_date': posted_date,
+                    })
+            if page > 0:
+                time.sleep(1)
+        except Exception as e:
+            print(f'  WTTJ hot jobs error ({query}, page={page}): {e}')
+            break
     return jobs
 
 
