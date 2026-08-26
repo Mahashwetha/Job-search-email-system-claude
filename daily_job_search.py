@@ -944,6 +944,7 @@ def fetch_hot_jobs(tracker):
             # If the fetch returns empty (rate-limited / no match), accept the job
             # rather than silently dropping it — better to show than miss.
             if desc_required:
+                candidates = [j for j in candidates if get_hot_job_location_tier(j['location']) == 0]
                 filled = 0
                 for job in candidates:
                     if filled >= slots_needed:
