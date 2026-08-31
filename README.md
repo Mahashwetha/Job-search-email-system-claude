@@ -259,9 +259,11 @@ python send_outreach_emails.py --name "Andrea Smith" --email "andrea@company.com
 > **Dead-link guard:** if the job posting URL returns 404 / is taken down, the role no longer exists — don't send the role-specific outreach; switch to the spontaneous template or skip (the `send-outreach` skill enforces this).
 
 **Templates** live in an `emailoutreach/` folder (local only, gitignored — personal content):
-- `cold_outreach_template.txt` — rich outreach with bullet points about your background (default when a role is known)
-- `cold_outreach_spontaneous_template.txt` — candidature spontanée for companies with no tracked open role
-- `followup_template.txt` — short 3-line nudge (for second follow-up after no reply)
+- `email_cold_outreach_template.txt` — rich outreach with bullet points about your background (default when a role is known)
+- `email_cold_outreach_spontaneous_template.txt` — candidature spontanée for companies with no tracked open role
+- `email_followup_template.txt` — short 3-line nudge (for second follow-up after no reply)
+- `linkedinoutreach_followup_template.txt` — LinkedIn InMail checking status on an already-submitted application
+- `linkedinoutreach_coldintro_template.txt` — LinkedIn InMail plain cold outreach, no application yet
 
 **Setup — paths to configure in `send_outreach_emails.py`:**
 ```python
@@ -511,9 +513,12 @@ claude-job-agent/
 │   ├── rejected_remote.json           # Reviewed & rejected (company, title) pairs
 │   ├── previous_jobs.json             # Last run's job keys for new-job detection (auto-generated)
 │   └── run_remote_job_search.bat      # Scheduler wrapper for remote search
-├── emailoutreach/                     # Email templates — LOCAL ONLY (gitignored, create your own)
-│   ├── cold_outreach_template.txt     # Rich cold outreach with bullet points (default)
-│   └── followup_template.txt          # Short follow-up nudge (second contact)
+├── emailoutreach/                     # Outreach templates — LOCAL ONLY (gitignored, create your own)
+│   ├── email_cold_outreach_template.txt             # Rich cold outreach with bullet points (default)
+│   ├── email_cold_outreach_spontaneous_template.txt # Candidature spontanee, no tracked open role
+│   ├── email_followup_template.txt                  # Short follow-up nudge (second contact)
+│   ├── linkedinoutreach_followup_template.txt       # LinkedIn InMail, checking status on an application
+│   └── linkedinoutreach_coldintro_template.txt      # LinkedIn InMail, plain cold outreach
 ├── resume/                            # Resume + portfolio PDFs — LOCAL ONLY (gitignored)
 │   ├── your_resume.pdf
 │   └── your_portfolio.pdf
