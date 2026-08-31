@@ -51,7 +51,7 @@ Add `--cc "[CC_EMAIL]"` if a CC was provided.
 - Looks up the role from `List.xlsx` (matches company name, status = `done`)
 - If found in tracker → fills `{role}` placeholder with the actual role title
 - If not in tracker → sets role to `[Company] opportunities`
-- Always uses `cold_outreach_template.txt` (Jinka-style with bullet points)
+- Always uses `email_cold_outreach_template.txt` (Jinka-style with bullet points)
 - Attaches both PDFs from `resume/` folder
 - Shows full preview before sending
 
@@ -60,7 +60,8 @@ Add `--cc "[CC_EMAIL]"` if a CC was provided.
 - **Never skip the test send step** — always preview to user's inbox first
 - **Never send to real recipient without explicit user approval** after the test
 - If the script errors on missing attachment, check that `resume/` folder has both PDFs
-- If template not found, check that `emailoutreach/cold_outreach_template.txt` exists
+- If template not found, check that `emailoutreach/email_cold_outreach_template.txt` exists
+- LinkedIn InMail variants also live in `emailoutreach/`: `linkedinoutreach_followup_template.txt` (checking status on an application) and `linkedinoutreach_coldintro_template.txt` (plain cold outreach, no application)
 - Do not hardcode HR contact details anywhere in code or skill files
 - **If the job listing URL returns 404 or any error (expired/taken down), do not send the outreach email** — the role no longer exists. Either switch to the spontaneous template or skip entirely and notify the user.
 
@@ -84,7 +85,7 @@ SUBJECT: {subject}
 ```
 
 ### Step 2 — Send automatically
-For each draft, send via `send_outreach_emails.py` (or an equivalent direct SMTP send using `cold_outreach_template.txt` + the tracker role lookup) — no confirmation prompt, no dry-run-to-self step.
+For each draft, send via `send_outreach_emails.py` (or an equivalent direct SMTP send using `email_cold_outreach_template.txt` + the tracker role lookup) — no confirmation prompt, no dry-run-to-self step.
 
 Do NOT send, and instead note as skipped in the receipt (see Step 4), if:
 - The contact's email is **flagged undeliverable/invalid by Hunter (or any verifier)**. Confirmed 2026-08-17: `cecile.grondin@netatmo.com` was flagged "undeliverable" by Hunter, sent anyway, and did in fact bounce/get flagged by Netatmo's mail server — so trust the verifier's "invalid/undeliverable" status and skip rather than guess-and-send.

@@ -36,7 +36,7 @@ from email import encoders
 # Example: r"C:\Users\yourname\Documents\Resume" or "/home/yourname/resume"
 RESUME_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'resume')
 
-# Folder containing your email templates (cold_outreach_template.txt, followup_template.txt)
+# Folder containing your email templates (email_cold_outreach_template.txt, email_followup_template.txt)
 # Example: r"C:\Users\yourname\Documents\EmailTemplates"
 TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'emailoutreach')
 
@@ -137,18 +137,18 @@ def main():
     if args.role:
         role = args.role
         print(f"Role override: {role}")
-        template_file = 'cold_outreach_template.txt'
+        template_file = 'email_cold_outreach_template.txt'
         print(f"Using cold outreach template")
     else:
         role = find_role_in_tracker(args.company)
         if role:
             print(f"Found in tracker: {args.company} | {role}")
-            template_file = 'cold_outreach_template.txt'
+            template_file = 'email_cold_outreach_template.txt'
             print(f"Using cold outreach template")
         else:
             role = ''
             print(f"Not in tracker: {args.company} -> using spontaneous template")
-            template_file = 'cold_outreach_spontaneous_template.txt'
+            template_file = 'email_cold_outreach_spontaneous_template.txt'
             print(f"Using spontaneous template")
 
     template = load_template(template_file)
