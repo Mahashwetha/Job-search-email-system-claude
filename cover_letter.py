@@ -57,7 +57,7 @@ CLOSE_PARA = (
     "discuss how my background aligns with {company}'s engineering goals."
 )
 
-HEADER = "Paris, France  |  +00 0 00 00 00 00  |  YOUR_EMAIL@gmail.com"
+HEADER = "Paris, France  |  +00 0 00 00 00 00  |  YOUR_EMAIL@gmail.com  |  linkedin.com/in/your-profile  |  github.com/Mahashwetha"
 
 COVER_PROMPT = """You are a cover letter writer for a senior backend engineer with 11 years of experience.
 
