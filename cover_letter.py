@@ -78,11 +78,12 @@ Generate ONLY a JSON object with these four keys (no markdown, no extra text):
 {{
   "company_value_prop": "<what the company/platform does — plain noun phrase, NO 'at the heart of', e.g. 'AI-first ecommerce search and discovery platform', max 12 words>",
   "role_hook": "<what this role builds/delivers — starts with an -ing verb, e.g. 'building scalable services that deliver enriched product metadata', max 15 words>",
-  "matched_para": "<full paragraph (3-5 sentences) highlighting candidate's existing skills that directly match this JD — name specific tech/tools from JD that candidate has; be concrete not vague>",
-  "gap_para": "<full paragraph (2-4 sentences) briefly bridging the most important gaps — be honest but positive; mention any genuine adjacent skills; don't list all gaps, pick the 1-2 most important>"
+  "matched_para": "<full paragraph (3-5 sentences) written in first person (I, my, me) highlighting candidate's existing skills that directly match this JD — name specific tech/tools from JD that candidate has; be concrete not vague>",
+  "gap_para": "<full paragraph (2-4 sentences) written in first person (I, my, me) briefly bridging the most important gaps — be honest but positive; mention any genuine adjacent skills; don't list all gaps, pick the 1-2 most important>"
 }}
 
 Rules:
+- matched_para and gap_para MUST be written in first person (I, my, me) — never refer to the candidate by name or use 'she/her/he/his/they'
 - matched_para: only mention tech/skills explicitly in both the JD and the candidate background above
 - gap_para: don't fabricate experience; use phrases like 'exposure to', 'actively expanding', 'hands-on with adjacent X and motivated to deepen Y'
 - Keep paragraphs at roughly the same length as natural cover letter prose
