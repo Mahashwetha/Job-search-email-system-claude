@@ -46,10 +46,20 @@ def _load_resume_text():
         return _RESUME_CACHE
 
     try:
-        from docx import Document
-        doc = Document(BASE_RESUME_PATH)
-        lines = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
-        _RESUME_CACHE = '\n'.join(lines)
+        if BASE_RESUME_PATH.lower().endswith('.pdf'):
+            import pdfplumber
+            with pdfplumber.open(BASE_RESUME_PATH) as pdf:
+                lines = []
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text:
+                        lines.append(text)
+            _RESUME_CACHE = '\n'.join(lines)
+        else:
+            from docx import Document
+            doc = Document(BASE_RESUME_PATH)
+            lines = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+            _RESUME_CACHE = '\n'.join(lines)
         return _RESUME_CACHE
     except Exception:
         pass
@@ -67,9 +77,9 @@ def _load_resume_text():
         pass
 
     _RESUME_CACHE = (
-        'Senior Java Backend Developer, ~12 years experience (NASDAQ, Cisco), Paris-based. '
+        'Senior Java Backend Developer, ~11 years experience (NASDAQ, Cisco), Paris-based. '
         'Core skills: Java, Spring Boot, microservices, OTT platforms, trade surveillance, '
-        'REST APIs, Kafka, distributed systems. Upskilling: GenAI/LLM integration.'
+        'REST APIs, distributed systems. Upskilling: GenAI/LLM integration.'
     )
     return _RESUME_CACHE
 

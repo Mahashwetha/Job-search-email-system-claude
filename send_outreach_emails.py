@@ -42,7 +42,7 @@ TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'emailou
 
 # PDF files to attach — update filenames to match your actual files
 ATTACHMENTS = [
-    os.path.join(RESUME_DIR, 'mahashwetharao_resume_2026_English_latest.pdf'),       # <-- your resume PDF
+    os.path.join(RESUME_DIR, 'Mahashwetha_resume_2026_centurygothic_aug.pdf'),       # <-- your resume PDF
     os.path.join(RESUME_DIR, 'portfolio_personal_projects_mahashwetha.pdf'),   # <-- your portfolio PDF
 ]
 
@@ -133,18 +133,21 @@ def main():
 
     first_name = args.name.split()[0]
 
-    # Auto-detect role; use spontaneous template when no tracker match
+    # A tracker role (found or overridden) means status=done, i.e. already applied ->
+    # always use the follow-up template ("I recently applied..."), never the
+    # agency-flavored cold outreach template. Only a genuine no-match falls back
+    # to the spontaneous template.
     if args.role:
         role = args.role
         print(f"Role override: {role}")
-        template_file = 'email_cold_outreach_template.txt'
-        print(f"Using cold outreach template")
+        template_file = 'email_followup_template.txt'
+        print(f"Using follow-up template (already applied)")
     else:
         role = find_role_in_tracker(args.company)
         if role:
             print(f"Found in tracker: {args.company} | {role}")
-            template_file = 'email_cold_outreach_template.txt'
-            print(f"Using cold outreach template")
+            template_file = 'email_followup_template.txt'
+            print(f"Using follow-up template (already applied)")
         else:
             role = ''
             print(f"Not in tracker: {args.company} -> using spontaneous template")
