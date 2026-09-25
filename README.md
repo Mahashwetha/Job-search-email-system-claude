@@ -2,7 +2,7 @@
 
 An end-to-end automated job search pipeline that handles everything from finding opportunities to preparing applications. Sends daily styled HTML email digests from your Excel tracker, scans remote job APIs for EMEA-compatible roles, tailors resumes per company using Gemini AI, sends HR outreach emails with attachments, and drafts LinkedIn outreach messages — all on autopilot via Windows Task Scheduler.
 
-**Heavily driven by Claude Code Skills** — 12 plain-language voice commands cover the entire workflow: adding jobs, rejecting, opening hot jobs, emailing HR, tailoring resumes, generating cover letters, fit-checking a posting, and more. No scripts to remember, no flags to type.
+**Heavily driven by Claude Code Skills** — 13 plain-language voice commands cover the entire workflow: adding jobs, rejecting, opening hot jobs, emailing HR, tailoring resumes, generating cover letters, fit-checking a posting, and more. No scripts to remember, no flags to type.
 
 ## Features
 
@@ -18,7 +18,10 @@ An end-to-end automated job search pipeline that handles everything from finding
 - **HR Contact Management** - Maintains recruiter contacts with clickable LinkedIn hyperlinks
 - **Platform Aggregators** - Curated search links (Glassdoor, LinkedIn, WelcomeToTheJungle, etc.)
 - **Windows Automation** - Runs on autopilot via Task Scheduler
-- **Claude Code Skills (11)** - Plain-language commands for every step: add jobs, reject, open hot jobs, email HR, tailor resume, generate cover letter, fit-check a posting, run search — no flags, no scripts to remember, just say what you want
+- **Email-Reply Agent** - Reply to the daily or remote digest in plain English ("Pivot rejected, applied to the duvo one, block all") and an AI agent (Gemini function calling) updates the tracker and blocklists, then replies in the same thread with a receipt. Only acts on your own replies to your own digests. See [tracker_mcp/README.md](tracker_mcp/README.md)
+- **Tracker MCP Server** - The tracker exposed as 9 Model Context Protocol tools (search, add job, update status, reject, add HR contact, block hot/remote jobs), usable by the email agent or any MCP client
+- **Safe Tracker Scripts** - Every tracker read/write goes through tested scripts sharing one lock, automatic backups, duplicate-URL checks and append-only contact updates (`tracker_lib.py`)
+- **Claude Code Skills (13)** - Plain-language commands for every step: add jobs, update status, reject, open hot jobs, email HR, tailor resume, generate cover letter, fit-check a posting, run search. No flags, no scripts to remember, just say what you want
 
 ## Email Previews
 
@@ -427,14 +430,17 @@ python resume_tailor.py "https://company.workdayjobs.com/job/..." "Company Name"
 
 Skills are the **primary interface** for this project. Instead of remembering script names, paths, and flags, you just describe what you want in plain language — Claude picks the right skill and executes the full workflow.
 
-This project includes **12 skills** covering every stage of the job search:
+This project includes **13 skills** covering every stage of the job search:
 
 ### Tracker Management
 
+Each tracker skill runs a tested script (`.claude/skills/<skill>/scripts/`) built on `tracker_lib.py`, so writes are locked, backed up and duplicate-checked.
+
 | Skill | What it does | Say something like... |
 |-------|-------------|----------------------|
-| **new-job** | Adds a new job to `List.xlsx` with company, role, URL, and status | "new job https://..." · "I applied to Qonto" · "add to tracker" |
-| **mark-rejected** | Marks a company as Rejected in the tracker | "Deel rejected" · "mark Natixis as rejected" |
+| **new-job** | Adds a new job to `List.xlsx`; refuses a duplicate job URL, warns if the company already exists | "new job https://..." · "I applied to Qonto" · "add to tracker" |
+| **update-status** | Changes an existing row's status (e.g. a callback -> In progress) with an optional dated note; asks which row if the company has several | "Galadrim called me back" · "move Pivot to in progress" |
+| **mark-rejected** | Marks a company as Rejected in the tracker (`--dry-run` to preview) | "Deel rejected" · "mark Natixis as rejected" |
 | **search** | Checks if a company or URL is already in the tracker | "have I applied to Datadog?" · "is this url in my tracker?" |
 
 ### Hot Jobs
@@ -442,7 +448,7 @@ This project includes **12 skills** covering every stage of the job search:
 | Skill | What it does | Say something like... |
 |-------|-------------|----------------------|
 | **open-hot-jobs** | Opens all (or a category of) hot job links in the browser | "open all hot jobs" · "open backend java hot jobs" |
-| **remove-hot-job** | Removes a job from the hot list and blocklists it | "remove senior java hot jobs" · "I applied to Theodo from hot jobs" |
+| **remove-hot-job** | Removes a job from the hot list and blocklists it; `--all` blocks every current hot job except tracked companies | "remove senior java hot jobs" · "block all daily jobs" |
 | **reject-job** | Blocklists a company/role from appearing in future hot jobs | "hide this job" · "don't show Capgemini again" |
 
 ### Outreach & Applications
@@ -466,6 +472,26 @@ This project includes **12 skills** covering every stage of the job search:
 **How skills work:** Each skill is a `SKILL.md` file in `.claude/skills/` that encodes the full workflow — which script to run, what args to pass, what to check, what can go wrong. Claude reads it and follows it exactly. No slash commands, no flags to remember. Just say what you want.
 
 Skills are version-controlled with the project and load automatically in every Claude Code session.
+
+## Tracker MCP Server & Email-Reply Agent
+
+The tracker is also available to AI agents through an **MCP server** (`tracker_mcp/server.py`, FastMCP). Its 9 tools are thin wrappers around the same skill scripts, so Claude Code skills and agents share one implementation and one set of safety rules:
+
+`search_tracker` · `add_job` · `update_status` · `mark_rejected` · `add_hr_contact` · `block_hot_job` · `block_all_hot_jobs` · `reject_remote_job` · `reject_all_remote`
+
+On top of it, **`tracker_mcp/email_agent.py`** turns your email replies into actions:
+
+```
+You reply to a digest: "Pivot rejected, applied to the duvo one, block all"
+   -> agent reads the reply from Gmail (IMAP), every 30 min via Task Scheduler
+   -> Gemini (function calling) picks the MCP tools and arguments
+   -> tools update List.xlsx / blocklists (locked, backed up)
+   -> receipt emailed back in the same thread: "Done: ... / Needs your input: ..."
+```
+
+Safety: it only acts on emails **from your own address** that are **replies to the daily or remote digest** (prompt-injection guard); the quoted digest is treated as data only; destructive "all" actions preview first; each reply is processed exactly once; its own receipts are tagged and ignored. Tested with an end-to-end MCP test suite (24 checks) and agent evals.
+
+Setup, commands and design notes: [tracker_mcp/README.md](tracker_mcp/README.md).
 
 ## Architecture
 
@@ -493,6 +519,12 @@ Excel Tracker (List.xlsx)
             │       ├── fit_scorer.py ──→ Gemini fit badges (chunked 15/call, thinking disabled, graceful on rate-limit)
             │       └── rejected_remote.json (filtered out before email/Excel)
             └── reject_remote.py ──→ CLI to manage rejected_remote.json
+
+Tracker access (skills + agents share one path)
+    Claude Code skill ──┐
+    email_agent.py ─────┼─→ tracker_mcp/server.py (MCP tools) ─→ skill scripts ─→ tracker_lib.py ─→ List.xlsx
+    (Gemini function     │                                                     (lock + backup + duplicate checks)
+     calling, Gmail IMAP)┘
 ```
 
 ## File Structure
@@ -507,6 +539,13 @@ claude-job-agent/
 ├── fit_check.py                       # CLI: score one job posting against your resume
 ├── cover_letter.py                    # CLI: generate tailored cover letter for a job URL
 ├── send_outreach_emails.py            # CLI: send cold outreach emails to HR with PDF attachments
+├── tracker_lib.py                     # Shared safe tracker access: lock, backups, URL matching
+├── tracker_mcp/
+│   ├── server.py                      # MCP server: 9 tracker/blocklist tools
+│   ├── email_agent.py                 # Email-reply agent (Gmail IMAP + Gemini function calling + MCP)
+│   ├── test_server.py                 # End-to-end MCP tests (run on copies of your files)
+│   ├── run_email_agent.bat / run_email_agent_hidden.vbs   # Scheduler wrappers (hidden window)
+│   └── README.md                      # Setup, tools, safety rules
 ├── remote_search/
 │   ├── remote_job_search.py           # Remote job API scanner (EMEA filter + Bluedoor + fit + Excel dump)
 │   ├── reject_remote.py               # CLI to manage rejected jobs list
@@ -536,14 +575,15 @@ claude-job-agent/
 ├── README.md                          # This file
 └── .claude/
     └── skills/
-        ├── new-job/SKILL.md           # Auto-triggered: add new job to tracker
-        ├── mark-rejected/SKILL.md     # Auto-triggered: mark company as rejected
-        ├── search/SKILL.md            # Auto-triggered: search tracker by company or URL
+        ├── new-job/                   # Auto-triggered: add new job to tracker (scripts/add_job.py)
+        ├── update-status/             # Auto-triggered: change a row's status (scripts/update_status.py)
+        ├── mark-rejected/             # Auto-triggered: mark company as rejected (scripts/mark_rejected.py)
+        ├── search/                    # Auto-triggered: search tracker by company or URL (scripts/search_tracker.py)
         ├── reject-job/SKILL.md        # Auto-triggered: reject/hide remote jobs
         ├── open-hot-jobs/SKILL.md     # Auto-triggered: open hot job links in browser
         ├── remove-hot-job/SKILL.md    # Auto-triggered: remove & blocklist hot jobs
         ├── test-run/SKILL.md          # Auto-triggered: manually run daily or remote search
-        ├── update-hr/SKILL.md         # Auto-triggered: find and add HR contacts
+        ├── update-hr/                 # Auto-triggered: find and add HR contacts (scripts/add_hr_contact.py)
         ├── resume-tailor/SKILL.md     # Auto-triggered: tailor resume for a company
         ├── send-outreach/SKILL.md     # Auto-triggered: send cold outreach email to HR contact
         ├── cover-letter/SKILL.md      # Auto-triggered: generate tailored cover letter for a job URL

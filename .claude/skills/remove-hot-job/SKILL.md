@@ -45,6 +45,13 @@ Manage the hot jobs list in `daily_hot_jobs.json`. Hot jobs are sticky LinkedIn 
    - Uses `ensure_ascii=False` so no encoding issues.
 3. Confirm output to the user: removed from current_jobs + blocklisted.
 
+**Block ALL current hot jobs** ("block all daily jobs"): one command instead of one run per job:
+```
+python .claude/skills/remove-hot-job/scripts/blocklist_job.py --all --dry-run   # preview
+python .claude/skills/remove-hot-job/scripts/blocklist_job.py --all             # apply
+```
+It automatically skips companies already in the tracker (applied jobs clear naturally).
+
 ## Important notes
 - Clearing slots triggers backfill on the next daily run (11:00 AM).
 - Do NOT run the daily script after editing — changes take effect on the next scheduled run.
