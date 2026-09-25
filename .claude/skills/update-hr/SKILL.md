@@ -28,6 +28,15 @@ Run `update_hr_contacts.py` from the project root. The script reads existing cel
 
 The script reports how many rows were updated. Check that the count matches expectations.
 
+## Adding a single contact to one row (e.g. a verified recruiter email)
+
+For one contact on one specific row, use the append-only script instead of editing the cell by hand:
+```
+python .claude/skills/update-hr/scripts/add_hr_contact.py --row 311 --name "Jane Doe" --url "https://www.linkedin.com/in/..." [--title "Tech Recruiter"] [--email "x@company.com"]
+python .claude/skills/update-hr/scripts/add_hr_contact.py --company "Bluecoders" --name ...   (all rows of that company)
+```
+It keeps every existing contact, appends the new one with CHAR(10), does nothing if the name is already there, takes the shared tracker lock and backs up List.xlsx first. Never write to column E with ad hoc openpyxl code (that is how row 311's contacts were once overwritten).
+
 ## Rules
 - Never overwrite manually entered contacts — the script is append-only.
 - Write names directly, no [UNVERIFIED] prefix.

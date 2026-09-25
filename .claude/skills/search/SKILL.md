@@ -5,53 +5,30 @@ description: This skill should be used when the user wants to check if a company
 
 # Search Tracker
 
-Look up a company or URL across **both sheets** of `List.xlsx` (Sheet1 = active applications, Rejected = rejected/closed applications).
+Look up a company or job URL in `List.xlsx` (Sheet1). Rejected applications are rows on Sheet1 with status `Rejected` and strikethrough; the old separate "Rejected" sheet was merged into Sheet1 on 2026-09-25.
 
-## What to do based on input
+## Steps
 
-### User gives a URL
-1. Open `List.xlsx` with openpyxl (use temp copy if PermissionError).
-2. Search column C in **both sheets** for that URL (exact or substring match). Also handle cells with `=HYPERLINK(...)` formula — extract the URL from inside the formula.
-3. If found → show all matching rows (see Output Format below).
-4. If not found → use `requests` to fetch the page and extract the `<title>` tag. Parse the company name from the title (format is usually `"Job Title - Company | Platform"`). Then search column A in both sheets by that company name.
-5. Report clearly: "Not in tracker" if nothing matches after both attempts.
-
-### User gives a company name only
-1. Open `List.xlsx` with openpyxl (use temp copy if PermissionError).
-2. Search column A in **both sheets** — case-insensitive substring match.
-3. Show all matching rows across both sheets (see Output Format below).
-4. Report "Not in tracker" if nothing found.
-
-## Output Format
-
-Group results by sheet, show row number, company, role, status (with emoji), URL, and any comments:
+Run the script from the project root (`C:/Users/mahas/Learnings/claude-job-agent`):
 
 ```
-Found 3 match(es) for "Theodo":
-
-  [Sheet1]
-    Row 45 — Theodo | AI Engineer | ✅ Applied
-             URL: https://welcometothejungle.com/...
-    Row 67 — Theodo | Tech Lead | 🕐 In Progress
-             URL: https://...
-
-  [Rejected]
-    Row 12 — Theodo | Backend Engineer | ❌ Rejected
-             Note: French required
+python .claude/skills/search/scripts/search_tracker.py "Company Name"
+python .claude/skills/search/scripts/search_tracker.py "https://job-url"
 ```
 
-Status emoji mapping:
+Add `--json` for machine-readable output.
+
+The script is read-only. It:
+- matches company names case-insensitively, both ways (`query in company` or `company in query`), skipping empty cells
+- for a URL: matches column C, including URLs inside `=HYPERLINK(...)` formulas, ignoring `www`, query strings, trailing slashes and `/thanks` or `/application` suffixes
+- for a URL not found: fetches the page title, extracts the company, and searches by company
+- prints row number, company, role, status (with emoji), URL and comments
+
+Show the script output to the user. Do not write ad hoc openpyxl code for searches.
+
+## Status emoji mapping (used by the script)
 - `done` / `applied` → ✅ Applied
 - `in progress` / `under review` → 🕐 In Progress
 - `rejected` → ❌ Rejected
 - `not available` / `nothing to apply` → ⏸️ No Jobs Available
 - empty / other → ⬜ Not Contacted
-
-Always show the Comments column (col F) if it has content — it often has useful notes like "Job posting CLOSED" or "French required".
-
-## Rules
-- Always search BOTH sheets — Sheet1 and Rejected.
-- Skip header row (row 1) when iterating.
-- Company match is case-insensitive substring both ways: `query in company` OR `company in query`. **Skip empty cells** — empty string always matches any substring check, so guard with `if company` and `if url` before comparing.
-- For URL search, also check if the URL is wrapped in a HYPERLINK formula.
-- If the user gave a URL that's not in the tracker, always attempt to identify the company from the page before saying "not found".

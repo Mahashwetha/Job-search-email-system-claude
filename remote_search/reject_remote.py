@@ -23,8 +23,25 @@ import json
 import os
 import sys
 
-REJECTED_FILE = os.path.join(os.path.dirname(__file__), 'rejected_remote.json')
-PREVIOUS_JOBS_FILE = os.path.join(os.path.dirname(__file__), 'previous_jobs.json')
+_HERE = os.path.dirname(os.path.abspath(__file__))
+# *_OVERRIDE env vars point the script at copies (used by tests)
+REJECTED_FILE = os.environ.get('REJECTED_REMOTE_FILE_OVERRIDE') or os.path.join(_HERE, 'rejected_remote.json')
+PREVIOUS_JOBS_FILE = os.environ.get('PREVIOUS_JOBS_FILE_OVERRIDE') or os.path.join(_HERE, 'previous_jobs.json')
+
+
+def list_last():
+    """Show the jobs from the last remote digest and whether each is already rejected."""
+    try:
+        with open(PREVIOUS_JOBS_FILE, 'r', encoding='utf-8') as f:
+            previous = [list(e) for e in json.load(f)]
+    except (FileNotFoundError, json.JSONDecodeError):
+        print(f"ERROR: {PREVIOUS_JOBS_FILE} not found or empty.")
+        return
+    rejected = set(tuple(e) for e in load())
+    print(f"Last remote digest: {len(previous)} job(s)")
+    for company, title in previous:
+        mark = "already rejected" if (company.lower().strip(), title.lower().strip()) in rejected else "new"
+        print(f"  [{company}] {title}  ({mark})")
 
 
 def load():
@@ -123,6 +140,8 @@ EXAMPLES:
         list_all()
     elif args[0] == '--all':
         add_all()
+    elif args[0] == '--last':
+        list_last()
     elif args[0] == '--remove':
         if len(args) < 3:
             print("Usage: python reject_remote.py --remove \"company\" \"title\"")

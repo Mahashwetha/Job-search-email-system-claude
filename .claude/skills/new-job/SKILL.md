@@ -5,30 +5,31 @@ description: This skill should be used when the user wants to add a new company 
 
 # Add New Job to Tracker
 
-Add a new row to `List.xlsx` (the job application tracker at the path in `config.py → TRACKER_FILE`).
+Add a new row to `List.xlsx` (Sheet1) with the bundled script. Do not write ad hoc openpyxl code.
 
 ## Column layout
 - A: Company name
 - B: Role title
-- C: Role link (job posting URL)
+- C: Role link (job posting URL, without tracking redirects; `/thanks` pages are fine)
 - D: Status
-- E: HR contact (leave empty)
-- F: Comments (leave empty)
+- E: HR contact (leave empty; use the update-hr skill)
+- F: Comments (optional)
 
 ## Status values
-- Default (applied): `done`
-- Save for later / not yet applied: `In progress`
-
-If the user doesn't specify, use `done`.
+- `done` = applied (default)
+- `In progress` = ONLY when a callback/response was received
+- `Rejected` = only when logging a rejection for a job that was never tracked
 
 ## Steps
-1. Ask the user for any missing info: company name (required), role title, job URL. If they provided it already, skip asking.
-2. Open `List.xlsx` using openpyxl. Handle `PermissionError` by working from a temp copy.
-3. Use the first sheet (`wb.active` at load time — read it before any writes to avoid sheet-shift bugs).
-4. Append the new row at the bottom: Company, Role, URL, Status, empty, empty.
-5. Save the file.
-6. Confirm to the user: company name, role, status, and which row it was added to.
+1. Get the company name (required), role title and job URL. If the user only pasted a link, fetch the page (or the ATS public API: Ashby/Lever/Greenhouse) to get company and role.
+2. Run from the project root (`C:/Users/mahas/Learnings/claude-job-agent`):
+   ```
+   python .claude/skills/new-job/scripts/add_job.py --company "Company" --role "Role" --url "https://..." [--status done] [--comment "..."]
+   ```
+3. Handle the result:
+   - `ADDED: row N` (exit 0) → confirm company, role, status and row to the user.
+   - `DUPLICATE` (exit 2) → the same job URL is already tracked; tell the user the existing row, do not add.
+   - `COMPANY EXISTS` (exit 3) → show the existing rows. If it's a different role, re-run with `--force`.
+   - `ERROR` (exit 1) → e.g. Excel has the file open; ask the user to close it and retry.
 
-## Things to check
-- If the company already exists in the tracker, mention it and ask if they still want to add a new row (they may have a different role).
-- Leave columns E and F empty — HR contacts are managed separately via the update-hr workflow.
+The script takes the shared tracker lock, backs up List.xlsx to `backups/` before writing, and matches URLs ignoring `www`, query strings, trailing slashes and `/thanks` or `/application` suffixes.

@@ -56,3 +56,9 @@ Thumbs.db
 remote_search/previous_jobs.json
 remote_search/rejected_remote.json
 daily_hot_jobs.json
+
+# tracker MCP server virtualenv
+.venv/
+# email agent runtime files
+tracker_mcp/state/
+tracker_mcp/logs/

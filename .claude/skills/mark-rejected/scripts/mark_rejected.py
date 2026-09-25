@@ -1,25 +1,22 @@
 """
-mark_rejected.py — mark a company as Rejected in List.xlsx
+mark_rejected.py - mark a company as Rejected in List.xlsx
 
 Sets column D to "Rejected" and applies strikethrough font across columns A-F.
-Append-only safe: only touches the matched company row(s).
+Only touches the matched company row(s). Takes the shared tracker lock and
+backs up List.xlsx before writing.
 
 Usage:
   python .claude/skills/mark-rejected/scripts/mark_rejected.py "Company Name"
+  python .claude/skills/mark-rejected/scripts/mark_rejected.py "Company Name" --dry-run   (list matches, change nothing)
+Exit codes: 0 updated (or dry-run listed), 4 no match, 1 error.
 """
-import sys
 import os
-import shutil
-import tempfile
-import openpyxl
+import sys
+
 from openpyxl.styles import Font
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
-try:
-    from config import TRACKER_FILE
-except ImportError:
-    print("ERROR: config.py not found. Copy config.template.py to config.py.")
-    sys.exit(1)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", ".."))
+import tracker_lib as T  # noqa: E402
 
 STRIKETHROUGH_COLS = 6  # A through F
 
@@ -27,58 +24,45 @@ STRIKETHROUGH_COLS = 6  # A through F
 def apply_strikethrough(ws, row_idx):
     for col in range(1, STRIKETHROUGH_COLS + 1):
         cell = ws.cell(row=row_idx, column=col)
-        existing = cell.font
-        cell.font = Font(
-            name=existing.name,
-            size=existing.size,
-            bold=existing.bold,
-            italic=existing.italic,
-            color=existing.color,
-            strike=True,
-        )
+        f = cell.font
+        cell.font = Font(name=f.name, size=f.size, bold=f.bold, italic=f.italic,
+                         color=f.color, underline=f.underline, strike=True)
 
 
-def mark_rejected(company_name):
-    search = company_name.strip().lower()
-    temp_file = None
-    try:
-        try:
-            wb = openpyxl.load_workbook(TRACKER_FILE)
-        except PermissionError:
-            print("  File locked — using temp copy...")
-            fd, temp_file = tempfile.mkstemp(suffix='.xlsx')
-            os.close(fd)
-            shutil.copy2(TRACKER_FILE, temp_file)
-            wb = openpyxl.load_workbook(temp_file)
-
-        ws = wb.active
-        matched = []
-
-        for row in ws.iter_rows(min_row=2):
-            cell_a = row[0]
-            if cell_a.value and search in str(cell_a.value).strip().lower():
-                row_idx = cell_a.row
-                # Set status column (D = col 4)
-                ws.cell(row=row_idx, column=4).value = "Rejected"
-                apply_strikethrough(ws, row_idx)
-                matched.append((row_idx, str(cell_a.value).strip()))
-
+def mark_rejected(company_name, dry_run=False):
+    with T.tracker_lock():
+        wb = T.load()
+        ws = wb["Sheet1"]
+        q = company_name.strip().lower()
+        matched = [(r, T.cell_text(v[0]), T.cell_text(v[1]), T.cell_text(v[3]))
+                   for _, r, v in T.rows(wb) if q and q in T.cell_text(v[0]).lower()]
         if not matched:
             print(f"No rows found matching: '{company_name}'")
-            return
-
-        wb.save(TRACKER_FILE)
-        for idx, name in matched:
-            print(f"  Row {idx}: '{name}' -> Rejected + strikethrough applied")
-        print(f"Done. {len(matched)} row(s) updated.")
-
-    finally:
-        if temp_file and os.path.exists(temp_file):
-            os.remove(temp_file)
+            return 4
+        if dry_run:
+            print(f"DRY RUN: {len(matched)} row(s) would be marked Rejected:")
+            for r, co, role, status in matched:
+                print(f"  Row {r}: '{co}' | {role} | currently: {status}")
+            return 0
+        backup_path = T.backup()
+        for r, *_ in matched:
+            ws.cell(row=r, column=T.COL_STATUS).value = "Rejected"
+            apply_strikethrough(ws, r)
+        T.save(wb)
+    for r, co, role, _ in matched:
+        print(f"  Row {r}: '{co}' | {role} -> Rejected + strikethrough applied")
+    print(f"Done. {len(matched)} row(s) updated. (backup: {backup_path})")
+    return 0
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print("Usage: python mark_rejected.py \"Company Name\"")
+    sys.stdout.reconfigure(encoding="utf-8")
+    args = [a for a in sys.argv[1:] if a != "--dry-run"]
+    if not args:
+        print("Usage: python mark_rejected.py \"Company Name\" [--dry-run]")
         sys.exit(1)
-    mark_rejected(sys.argv[1])
+    try:
+        sys.exit(mark_rejected(args[0], dry_run="--dry-run" in sys.argv))
+    except (TimeoutError, PermissionError) as e:
+        print(f"ERROR: {e}")
+        sys.exit(1)
