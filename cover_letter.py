@@ -41,13 +41,25 @@ COVER_LETTER_OUTPUT_DIR = os.path.join(
 # ── Fixed template parts ──────────────────────────────────────────────────────
 
 PERSONAL_PROJECTS_PARA = (
-    "In parallel to my job search, I built several personal projects end-to-end: "
-    "an automated job-tracking pipeline (Python, Excel, SMTP, Gemini API, Claude API), "
-    "and Fit-Check — a live AI-powered job fit scorer deployed on Render "
-    "(FastAPI, Gemini 2.5 Flash, Docker) that parses any job URL against a resume and "
-    "returns a skill-by-skill breakdown. All of these are open sourced, usable by me "
-    "almost on daily basis for fast tracking many iterative activities and I learnt it all "
-    "by my self with help of claude and built from scratch."
+    "Outside work, I build and ship my own tools. I built an automated job-search pipeline "
+    "(Python, Gemini and Claude APIs) and Fit-Check, a live AI app on Render (FastAPI, Gemini, "
+    "Docker) that scores any job posting against a resume, skill by skill. Both are open source "
+    "and I use them every day, which is how I learned to design, deploy and maintain "
+    "AI-powered systems end to end."
+)
+
+BANNED_OPENINGS = ("i am writing", "i'm writing", "express my interest", "i am excited",
+                   "i'm excited", "with over", "i am thrilled", "i would like to apply",
+                   "aligns perfectly")
+# claims that the candidate has domain expertise she doesn't have (NASDAQ = trade surveillance)
+FALSE_DOMAIN_CLAIM = re.compile(
+    r"(expertise|experience|background|expert|specialist)\s+(in|with|of)\s+(\w+\s){0,2}"
+    r"(payments?|transaction processing|trade execution|banking|lending|insurance)", re.I)
+
+FALLBACK_OPENING = (
+    "At NASDAQ, I led development of the alerting framework behind the SMARTS trade surveillance "
+    "platform, cutting development effort by 15% across more than 350 subscription deployments. "
+    "I would like to bring that production-grade backend experience to the {role} role at {company}."
 )
 
 CLOSE_PARA = (
@@ -63,10 +75,22 @@ COVER_PROMPT = """You are a cover letter writer for a senior backend engineer wi
 
 CANDIDATE BACKGROUND:
 - 11+ years Core Java, Spring, Spring AOP/AspectJ, JUnit, Jenkins CI/CD, Bash scripting
-- Former NASDAQ trading surveillance engineer
+- Former NASDAQ trade surveillance engineer (SMARTS market-abuse alerting platform; NOT payments or trade execution)
 - Exposure to Python (personal projects), Docker, Kubernetes (conceptual), C++
 - Actively upskilling: AI/LLM integration (GitHub Copilot, Gemini API, Claude API)
 - Based in Paris, France — open to remote/hybrid/on-site
+
+CANDIDATE ACHIEVEMENTS (verified facts; the ONLY achievements and numbers you may cite, never invent others):
+- Led development of a Spring AspectJ + Jackson framework for structured alerting on NASDAQ's SMARTS trade surveillance platform; performance tuning cut development effort by 15%
+- Deployed 350+ SMARTS alert subscriptions across APAC, EMEA and NSAC using Agile practices
+- Delivered 500+ subscription migrations across production systems through 30+ backend investigations
+- Upgraded APIs from Java 7 to Java 11
+- Built an XML-based Java parameter migration tool with Jenkins integration, used for all subscription migrations
+- Senior Tech Lead at NASDAQ: mentored junior developers, led code reviews and design discussions
+- 5 years at Cisco Video Technology on Set Top Box / OTT: EPG features, MPEG DASH, DRM, JavaScript; delivered the Viasat Ukraine Zapper project
+- Personal projects: built and deployed Fit-Check (FastAPI, Gemini, Docker, live on Render) and an open-source AI job-search pipeline (Python, Gemini and Claude APIs)
+
+REFERRAL: {referral}
 
 JOB:
 Company: {company}
@@ -74,8 +98,10 @@ Role: {role}
 Job Description:
 {jd}
 
-Generate ONLY a JSON object with these four keys (no markdown, no extra text):
+Generate ONLY a JSON object with these keys (no markdown, no extra text):
 {{
+  "opening_type": "<one of: referral, achievement, company, capability>",
+  "opening_para": "<exactly 2 sentences that open the letter. Choose the ONE strongest opening for this job: referral (only if REFERRAL is not 'none': name the referrer in sentence 1); achievement (one item from CANDIDATE ACHIEVEMENTS tied to an outcome this JD cares about); company (a concrete detail from the JD about what the company builds or has just announced, connected to the candidate's experience); capability (the JD's single most critical requirement, stated with specific evidence from the achievements). Sentence 2 connects it to the {role} role at {company}.>",
   "company_value_prop": "<what the company/platform does — plain noun phrase, NO 'at the heart of', e.g. 'AI-first ecommerce search and discovery platform', max 12 words>",
   "role_hook": "<what this role builds/delivers — starts with an -ing verb, e.g. 'building scalable services that deliver enriched product metadata', max 15 words>",
   "matched_para": "<full paragraph (3-5 sentences) written in first person (I, my, me) highlighting candidate's existing skills that directly match this JD — name specific tech/tools from JD that candidate has; be concrete not vague>",
@@ -85,7 +111,10 @@ Generate ONLY a JSON object with these four keys (no markdown, no extra text):
 Rules:
 - matched_para and gap_para MUST be written in first person (I, my, me) — never refer to the candidate by name or use 'she/her/he/his/they'
 - matched_para: only mention tech/skills explicitly in both the JD and the candidate background above
-- gap_para: don't fabricate experience; use phrases like 'exposure to', 'actively expanding', 'hands-on with adjacent X and motivated to deepen Y'
+- gap_para: don't fabricate experience. State plainly what the candidate has not used, then mention only real adjacent experience from the background above. Never claim the candidate is currently learning, deepening, expanding or upskilling in a gap technology unless the background explicitly says so (only the 'Actively upskilling' line above counts)
+- opening_para must NOT contain "I am writing", "express my interest", "I am excited", "With over", "aligns perfectly", must not summarise the CV and must not explain why the candidate wants the job; it must name {company}; it may only use facts from CANDIDATE ACHIEVEMENTS and CANDIDATE BACKGROUND
+- NEVER re-label the candidate's domain to match the company's. NASDAQ work was TRADE SURVEILLANCE (market-abuse alerting), not payments, trading execution, banking or transaction processing; Cisco work was video/Set Top Box. Say what the work actually was, then connect it with "similar" or "transferable" if relevant (e.g. "high-reliability financial systems")
+- matched_para must NOT start with "With over" or restate the achievement already used in opening_para; use different evidence
 - Keep paragraphs at roughly the same length as natural cover letter prose
 - Tone: confident, specific, not generic"""
 
@@ -177,16 +206,25 @@ def call_gemini(prompt, max_retries=3):
 
 # ── Assemble cover letter ─────────────────────────────────────────────────────
 
-def assemble_text(company, role, parts):
-    value_prop = parts.get('company_value_prop', f"building great products at {company}")
-    role_hook = parts.get('role_hook', f"contribute to {role}")
+def build_opening(company, role, parts):
+    """Gemini's opening_para if it follows the rules, else a safe achievement-led opening."""
+    opening = (parts.get('opening_para') or '').strip()
+    low = opening.lower()
+    reasons = [f"banned phrase '{b}'" for b in BANNED_OPENINGS if b in low]
+    if opening and company.lower() not in low:
+        reasons.append("company not named")
+    m = FALSE_DOMAIN_CLAIM.search(opening)
+    if m:
+        reasons.append(f"false domain claim '{m.group(0)}'")
+    if opening and not reasons:
+        return opening
+    if opening:
+        print(f"  Opening rejected ({'; '.join(reasons)}), using fallback. Rejected text: {opening}")
+    return FALLBACK_OPENING.format(company=company, role=role)
 
-    intro = (
-        f"I am writing to express my interest in the {role} position at {company}. "
-        f"With over 11 years of experience building and maintaining mission-critical backend systems, "
-        f"I am excited by the opportunity to contribute to {company}'s {value_prop} "
-        f"by {role_hook}."
-    )
+
+def assemble_text(company, role, parts):
+    intro = build_opening(company, role, parts)
 
     paragraphs = [
         "Respected Hiring Manager,",
@@ -204,7 +242,7 @@ def assemble_text(company, role, parts):
         "Thank you for considering my application. I look forward to the possibility of speaking with you.",
         "",
         "Sincerely,",
-        "Mahashwetha Rao",
+        "Mahashwetha",
     ]
     return "\n".join(paragraphs)
 
@@ -236,26 +274,7 @@ def save_docx(company, role, parts, output_path):
 
     add("Respected Hiring Manager,", space_after=8)
 
-    value_prop = parts.get('company_value_prop', f"building great products at {company}")
-    role_hook = parts.get('role_hook', f"contribute to {role}")
-    intro = (
-        f"I am writing to express my interest in the "
-    )
-    p = doc.add_paragraph()
-    p.paragraph_format.space_after = Pt(8)
-    r = p.add_run(intro)
-    r.font.name = 'Calibri'; r.font.size = Pt(11)
-    r = p.add_run(role)
-    r.bold = True; r.font.name = 'Calibri'; r.font.size = Pt(11)
-    r = p.add_run(f" position at ")
-    r.font.name = 'Calibri'; r.font.size = Pt(11)
-    r = p.add_run(company)
-    r.bold = True; r.font.name = 'Calibri'; r.font.size = Pt(11)
-    r = p.add_run(
-        f". With over 11 years of experience building and maintaining mission-critical backend systems, "
-        f"I am excited by the opportunity to contribute to {company}'s {value_prop} by {role_hook}."
-    )
-    r.font.name = 'Calibri'; r.font.size = Pt(11)
+    add(build_opening(company, role, parts), space_after=8)
 
     add(parts.get('matched_para', ''), space_after=8)
     add(parts.get('gap_para', ''), space_after=8)
@@ -263,8 +282,11 @@ def save_docx(company, role, parts, output_path):
     add(CLOSE_PARA.format(company=company), space_after=8)
     add("Thank you for considering my application. I look forward to the possibility of speaking with you.", space_after=16)
     add("Sincerely,", space_after=4)
-    add("Mahashwetha Rao", bold=True, space_after=0)
+    add("Mahashwetha", bold=True, space_after=0)
 
+    cp = doc.core_properties
+    cp.author = cp.last_modified_by = "Mahashwetha"
+    cp.comments = ""
     doc.save(output_path)
 
 
@@ -274,7 +296,7 @@ def safe_name(s):
     return re.sub(r'[^a-z0-9_]', '_', s.lower().strip()).strip('_')
 
 
-def generate(url, company, role=''):
+def generate(url, company, role='', referral=''):
     os.makedirs(COVER_LETTER_OUTPUT_DIR, exist_ok=True)
 
     print(f"  Fetching JD from {url}...")
@@ -287,12 +309,14 @@ def generate(url, company, role=''):
         role = extracted_role or company + ' role'
 
     print(f"  Calling Gemini ({GEMINI_MODEL}) to tailor cover letter...")
-    prompt = COVER_PROMPT.format(company=company, role=role, jd=jd_text[:5000])
+    prompt = COVER_PROMPT.format(company=company, role=role, jd=jd_text[:5000],
+                                 referral=referral.strip() or 'none')
     try:
         parts = call_gemini(prompt)
     except Exception as e:
         print(f"  ERROR: Gemini call failed: {e}")
         return
+    print(f"  Opening type: {parts.get('opening_type', '?')}")
 
     text = assemble_text(company, role, parts)
 
@@ -307,13 +331,16 @@ def generate(url, company, role=''):
 
 
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: python cover_letter.py \"https://job-url\" \"Company Name\" [\"Role Title\"]")
+    args = sys.argv[1:]
+    referral = ''
+    if '--referral' in args:
+        i = args.index('--referral')
+        referral = args[i + 1] if i + 1 < len(args) else ''
+        args = args[:i] + args[i + 2:]
+    if len(args) < 2:
+        print("Usage: python cover_letter.py \"https://job-url\" \"Company Name\" [\"Role Title\"] [--referral \"Name, their role\"]")
         exit(1)
-    url = sys.argv[1]
-    company = sys.argv[2]
-    role = sys.argv[3] if len(sys.argv) >= 4 else ''
-    generate(url, company, role)
+    generate(args[0], args[1], args[2] if len(args) >= 3 else '', referral)
 
 
 if __name__ == '__main__':
