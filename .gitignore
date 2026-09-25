@@ -62,3 +62,7 @@ daily_hot_jobs.json
 # email agent runtime files
 tracker_mcp/state/
 tracker_mcp/logs/
+# local-only working files (may contain recruiter names/emails)
+auto_apply/
+outreach_drafts/
+candidates_out.txt
