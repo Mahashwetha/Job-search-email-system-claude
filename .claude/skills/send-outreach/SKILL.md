@@ -49,9 +49,8 @@ Add `--cc "[CC_EMAIL]"` if a CC was provided.
 ## What the script does automatically
 
 - Looks up the role from `List.xlsx` (matches company name, status = `done`)
-- If found in tracker → fills `{role}` placeholder with the actual role title
-- If not in tracker → sets role to `[Company] opportunities`
-- Always uses `email_cold_outreach_template.txt` (Jinka-style with bullet points)
+- If found in tracker (role known/overridden) → status=done means already applied, so it uses `email_followup_template.txt` ("I recently applied for the {role} role...") — never the agency-flavored cold outreach template
+- If not in tracker → sets role to `[Company] opportunities` and uses `email_cold_outreach_spontaneous_template.txt`
 - Attaches both PDFs from `resume/` folder
 - Shows full preview before sending
 
