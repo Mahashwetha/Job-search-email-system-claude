@@ -25,6 +25,8 @@ SCRIPTS = {
     "status": os.path.join(ROOT, ".claude", "skills", "update-status", "scripts", "update_status.py"),
     "hot": os.path.join(ROOT, ".claude", "skills", "remove-hot-job", "scripts", "blocklist_job.py"),
     "remote": os.path.join(ROOT, "remote_search", "reject_remote.py"),
+    # people-first outreach sheet (routines/linkedin_people_finder)
+    "people": os.path.join(os.path.dirname(ROOT), "routines", "linkedin_people_finder", "mark_contacted.py"),
 }
 
 mcp = FastMCP("job-tracker")
@@ -123,6 +125,20 @@ def update_status(status: str, company: str = "", row: int = 0, note: str = "", 
     code, out = _run("status", *args)
     outcome = {0: "preview" if preview else "updated", 4: "no_match", 5: "ambiguous"}.get(code, "error")
     return {"ok": code == 0, "outcome": outcome, "message": out}
+
+
+@mcp.tool()
+def mark_people_contacted(names: list[str], status: str = "Contacted") -> dict:
+    """Update people in the LinkedIn outreach sheet (people_to_contact.xlsx) after she messages them.
+
+    names: people she mentions, e.g. ["Jane", "John Smith"]; a first name is enough if unique.
+    status: 'Contacted' (she sent the LinkedIn note; also sets a follow-up date in 7 days), 'Replied'
+    (they answered), 'Skipped' (she doesn't want to contact them), or 'To contact' (undo).
+    Names that match nobody or several people are reported back instead of guessed.
+    """
+    code, out = _run("people", "--status", status, *[n for n in names if n.strip()])
+    outcome = {0: "updated", 5: "partial"}.get(code, "error")
+    return {"ok": code in (0, 5), "outcome": outcome, "message": out}
 
 
 @mcp.tool()

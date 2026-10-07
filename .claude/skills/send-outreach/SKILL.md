@@ -10,7 +10,7 @@ Send a personalised cold outreach email with resume + portfolio attached using `
 ## Script location
 
 ```
-C:\Users\YOU\Learnings\claude-job-agent\send_outreach_emails.py
+claude-job-agent\send_outreach_emails.py
 ```
 
 ## What you need from the user
@@ -28,10 +28,10 @@ If the user hasn't provided all required info, ask for it before running.
 
 ### 1 — Preview first (dry run to user's inbox)
 
-Always send a test to `YOUR_EMAIL@gmail.com` first so the user can approve the email:
+Always send a test to your own address (`recipient_email` in `config.py`) first so the user can approve the email:
 
 ```bash
-cd "C:\Users\YOU\Learnings\claude-job-agent"
+cd claude-job-agent
 echo yes | python send_outreach_emails.py --name "[NAME]" --email "YOUR_EMAIL@gmail.com" --company "[COMPANY]"
 ```
 
@@ -40,7 +40,7 @@ Show the preview output to the user and ask: **"Looks good? Send to the real rec
 ### 2 — Send to real recipient (only after user confirms)
 
 ```bash
-cd "C:\Users\YOU\Learnings\claude-job-agent"
+cd claude-job-agent
 echo yes | python send_outreach_emails.py --name "[NAME]" --email "[EMAIL]" --company "[COMPANY]"
 ```
 
@@ -73,7 +73,7 @@ Per user instruction (2026-08-17): drafts to **known/verified HR contacts** are 
 When triggered by "send this week's outreach emails", "send weekly outreach", "send the drafted emails" — or automatically at the end of the weekly-hr-search routine right after drafts are written:
 
 ### Step 1 — Read saved drafts
-Check `C:\Users\YOU\Learnings\claude-job-agent\outreach_drafts\` for `*_draft.txt` files.
+Check `claude-job-agent\outreach_drafts\` for `*_draft.txt` files.
 
 Parse each file:
 ```
@@ -95,7 +95,7 @@ Do NOT send, and instead note as skipped in the receipt (see Step 4), if:
 After a draft sends successfully, delete that `_draft.txt` file so it doesn't appear again next week.
 
 ### Step 4 — Send a receipt email (mandatory, every run)
-After sending (or attempting) all drafts, send a plain-text receipt to `YOUR_EMAIL@gmail.com` listing, for every email actually sent:
+After sending (or attempting) all drafts, send a plain-text receipt to your own address (`recipient_email` in `config.py`) listing, for every email actually sent:
 - Company name
 - Role
 - HR contact name + email sent to

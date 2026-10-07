@@ -127,3 +127,10 @@ REMOTE_LOCATION_EXCLUDE = [
 # 3. Select "Mail" and your device
 # 4. Copy the 16-character password (no spaces)
 # 5. Paste it in 'sender_password' above
+
+# Contact line at the top of generated cover letters (cover_letter.py)
+COVER_LETTER_HEADER = 'City, Country  |  +00 0 00 00 00 00  |  your_email@gmail.com  |  linkedin.com/in/your-profile  |  your-site.dev  |  github.com/your-username'
+
+# Base CV for cv_tailor.py and plain-text resume fallback for fit_scorer.py
+BASE_CV_DOCX = r'C:\Path\To\Your\Resume.docx'
+QUICK_INTRO_PATH = r'C:\Path\To\Your\resume_summary.txt'

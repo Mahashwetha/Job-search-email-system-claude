@@ -50,11 +50,13 @@ def _gemini_url(model):
     return f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 OWN_ADDRESS = EMAIL_CONFIG["sender_email"].lower()
 AGENT_HEADER = "X-Job-Tracker-Agent"
-DIGESTS = {"daily": "Senior Jobs COMPACT", "remote": "Remote Roles"}
+DIGESTS = {"daily": "Senior Jobs COMPACT", "remote": "Remote Roles",
+           # weekly HR search receipt (subjects "Outreach Sent — ..." / "Weekly HR Search — ...")
+           "people": ("Outreach Sent", "Weekly HR Search")}
 STATE_FILE = os.path.join(HERE, "state", "processed.json")
 LOG_DIR = os.path.join(HERE, "logs")
 MAX_STEPS = 10
-MUTATING = {"add_job", "add_hr_contact", "block_hot_job", "reject_remote_job", "update_status"}
+MUTATING = {"add_job", "add_hr_contact", "block_hot_job", "reject_remote_job", "update_status", "mark_people_contacted"}
 CONFIRM_TOOLS = {"mark_rejected", "block_all_hot_jobs", "reject_all_remote"}
 
 SYSTEM_PROMPT = """You are the user's job-tracker assistant. The user replied to one of her own job digest emails.
@@ -90,6 +92,10 @@ DIGEST RULES (this reply is to the {digest} digest)
   "block all" -> reject_all_remote(confirm=false) then reject_all_remote(confirm=true).
   "block all senior" / "hide senior roles" -> reject_remote_job(company="", title="senior").
 - Do not block a job she says she applied to; record it with add_job instead.
+- people digest (the weekly HR search / LinkedIn people email): "sent X, Y" / "messaged X" / "connected with X"
+  -> mark_people_contacted(names=[...], status="Contacted"); "X replied" / "X answered" -> status="Replied";
+  "skip X" / "not X" -> status="Skipped". Pass the names exactly as she wrote them. If the result lists
+  NOT FOUND or AMBIGUOUS names, report them as "Needs your input" with the options shown.
 
 RECEIPT
 When finished, reply with plain text only: one line per requested action, starting with "Done:",
@@ -130,7 +136,7 @@ def header_text(value):
 def digest_type(subject):
     s = re.sub(r"^\s*((re|fwd?|tr)\s*:\s*)+", "", subject, flags=re.I)
     for kind, marker in DIGESTS.items():
-        if s.startswith(marker):
+        if s.startswith(marker if isinstance(marker, tuple) else (marker,)):
             return kind
     return None
 
@@ -167,7 +173,8 @@ def fetch_replies(state):
     imap = imaplib.IMAP4_SSL("imap.gmail.com")
     imap.login(EMAIL_CONFIG["sender_email"], EMAIL_CONFIG["sender_password"])
     imap.select('"[Gmail]/All Mail"', readonly=True)
-    query = f'from:me newer_than:7d (subject:({DIGESTS["daily"]}) OR subject:({DIGESTS["remote"]}))'
+    markers = [m for v in DIGESTS.values() for m in (v if isinstance(v, tuple) else (v,))]
+    query = "from:me newer_than:7d (" + " OR ".join(f"subject:({m})" for m in markers) + ")"
     typ, data = imap.uid("SEARCH", "X-GM-RAW", f'"{query}"')
     found = []
     for uid in (data[0].split() if typ == "OK" and data[0] else []):
@@ -225,7 +232,12 @@ def fallback_receipt(results):
 
 
 def to_gemini_schema(schema):
-    props = {k: {"type": v.get("type", "string")} for k, v in schema.get("properties", {}).items()}
+    def prop(v):
+        out = {"type": v.get("type", "string")}
+        if out["type"] == "array":  # Gemini requires the item type for arrays
+            out["items"] = {"type": (v.get("items") or {}).get("type", "string")}
+        return out
+    props = {k: prop(v) for k, v in schema.get("properties", {}).items()}
     out = {"type": "object", "properties": props}
     if schema.get("required"):
         out["required"] = schema["required"]

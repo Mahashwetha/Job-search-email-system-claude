@@ -9,7 +9,7 @@ Look up a company or job URL in `List.xlsx` (Sheet1). Rejected applications are 
 
 ## Steps
 
-Run the script from the project root (`C:/Users/YOU/Learnings/claude-job-agent`):
+Run the script from the project root (`claude-job-agent/`):
 
 ```
 python .claude/skills/search/scripts/search_tracker.py "Company Name"

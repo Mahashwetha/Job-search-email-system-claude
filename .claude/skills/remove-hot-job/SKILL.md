@@ -39,7 +39,7 @@ Manage the hot jobs list in `daily_hot_jobs.json`. Hot jobs are sticky LinkedIn 
    ```
    python .claude/skills/remove-hot-job/scripts/blocklist_job.py "Company Name" "Job Title"
    ```
-   Run from the project root (`C:/Users/YOU/Learnings/claude-job-agent`).
+   Run from the project root (`claude-job-agent/`).
    - Title is optional — omit to blocklist all jobs from that company.
    - The script removes from `current_jobs` AND adds to blocklist in one shot.
    - Uses `ensure_ascii=False` so no encoding issues.

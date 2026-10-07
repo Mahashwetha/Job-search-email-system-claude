@@ -26,5 +26,5 @@ Opens job URLs from `daily_hot_jobs.json` in Chrome tabs.
 ## Notes
 - If no category is specified, ask the user which one (or confirm if they want all).
 - If a category has no jobs (`[]`), tell the user it's empty.
-- Use Comet browser (Perplexity): `"/c/Users/YOU/AppData/Local/Perplexity/Comet/Application/comet.exe" --new-window "url1" "url2" ... &`
+- Use Comet browser (Perplexity): `"$LOCALAPPDATA/Perplexity/Comet/Application/comet.exe" --new-window "url1" "url2" ... &`
 - Always open in a new window using `--new-window`.

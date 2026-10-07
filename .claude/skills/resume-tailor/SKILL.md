@@ -47,7 +47,7 @@ No Gemini call, so it uses none of the 20/day free quota.
 `resume_adjusted\resume_<company>.docx` and `.pdf` (folder from `RESUME_OUTPUT_DIR` in `config.py`).
 An existing file with the same name is overwritten.
 
-Base CV: `Resume2026\SingleBlockResume- 2026augnew\Mahashwetha_resume_2026_centurygothic_aug.docx`
+Base CV: `BASE_CV_DOCX` in `config.py`
 (override with `BASE_CV_DOCX` in `config.py`). PDF export needs Microsoft Word.
 
 ## Legacy

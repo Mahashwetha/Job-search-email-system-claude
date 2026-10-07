@@ -18,7 +18,7 @@ User says `fit-check <url>` or pastes a job URL asking "is this a good fit" / "c
 3. Run from the project root:
 
 ```
-cd C:\Users\YOU\Learnings\claude-job-agent
+cd claude-job-agent
 python fit_check.py "<url>" [--title "..."] [--company "..."]
 ```
 

@@ -5,7 +5,7 @@ description: This skill should be used when the user wants to manually trigger, 
 
 # Test Run — Manual Script Execution
 
-Manually trigger the daily or remote job search scripts outside their scheduled runs. Run all commands from the project root: `C:/Users/YOU/Learnings/claude-job-agent`.
+Manually trigger the daily or remote job search scripts outside their scheduled runs. Run all commands from the project root: `claude-job-agent/`.
 
 ## Daily job search
 

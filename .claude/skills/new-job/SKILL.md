@@ -22,7 +22,7 @@ Add a new row to `List.xlsx` (Sheet1) with the bundled script. Do not write ad h
 
 ## Steps
 1. Get the company name (required), role title and job URL. If the user only pasted a link, fetch the page (or the ATS public API: Ashby/Lever/Greenhouse) to get company and role.
-2. Run from the project root (`C:/Users/YOU/Learnings/claude-job-agent`):
+2. Run from the project root (`claude-job-agent/`):
    ```
    python .claude/skills/new-job/scripts/add_job.py --company "Company" --role "Role" --url "https://..." [--status done] [--comment "..."]
    ```

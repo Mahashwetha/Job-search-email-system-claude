@@ -65,10 +65,10 @@ def _load_resume_text():
         pass
 
     # Fallback: myquickintro.txt
-    fallback = os.path.join(
-        os.path.expanduser('~'),
-        'OneDrive', 'Desktop', 'Resume2026', 'myquickintro.txt'
-    )
+    try:
+        from config import QUICK_INTRO_PATH as fallback
+    except ImportError:
+        fallback = os.path.join(os.path.expanduser('~'), 'myquickintro.txt')
     try:
         with open(fallback, encoding='utf-8') as f:
             _RESUME_CACHE = f.read()

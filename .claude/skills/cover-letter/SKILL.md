@@ -41,7 +41,7 @@ Use `--referral` whenever the user mentions a referral (someone at the company r
 
 ## Output location
 
-`C:\Users\YOU\OneDrive\Desktop\Applications\JobSearch\cover_letters\CoverLetter_{Company}.docx`
+`cover_letters/CoverLetter_{Company}.docx` (next to the resume output folder set in `config.py`)
 
 ## Template structure (fixed)
 

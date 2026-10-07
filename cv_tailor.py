@@ -32,9 +32,7 @@ except ImportError:
     print("ERROR: config.py not found!")
     sys.exit(1)
 
-BASE_CV_DOCX = getattr(config, "BASE_CV_DOCX", os.path.join(
-    os.path.expanduser("~"), "OneDrive", "Desktop", "Resume2026", "SingleBlockResume- 2026augnew",
-    "Mahashwetha_resume_2026_centurygothic_aug.docx"))
+BASE_CV_DOCX = getattr(config, "BASE_CV_DOCX", os.path.join(os.path.expanduser("~"), "resume.docx"))
 SKILLS_LABEL = "Frameworks & Tools:"
 NL = "\n"
 

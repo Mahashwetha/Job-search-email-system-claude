@@ -13,7 +13,7 @@ Change the status of an existing tracker row with the bundled script. For reject
 - `Rejected` = rejected (adds strikethrough)
 
 ## Steps
-Run from the project root (`C:/Users/YOU/Learnings/claude-job-agent`):
+Run from the project root (`claude-job-agent/`):
 ```
 python .claude/skills/update-status/scripts/update_status.py --company "Galadrim" --status "In progress" --note "phone screen booked"
 python .claude/skills/update-status/scripts/update_status.py --row 352 --status "In progress"

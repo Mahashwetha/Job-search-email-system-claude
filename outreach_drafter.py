@@ -16,7 +16,7 @@ from collections import OrderedDict
 from config import TRACKER_FILE, LINKEDIN_URL, USER_PROFILE
 from daily_job_search import parse_hr_contacts
 
-OUTPUT_DIR = r'C:\Users\YOU\OneDrive\Desktop\Applications\JobSearch\output'
+OUTPUT_DIR = os.path.join(os.path.dirname(TRACKER_FILE), 'output')
 
 # --- Profile values from config ---
 EXPERIENCE_YEARS = USER_PROFILE.get('experience_years', 5)

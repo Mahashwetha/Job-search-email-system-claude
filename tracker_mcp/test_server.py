@@ -38,9 +38,9 @@ async def main(test_dir):
             await s.initialize()
             tools = {t.name: t for t in (await s.list_tools()).tools}
             print("tools:", ", ".join(tools))
-            check("9 tools exposed", set(tools) == {"search_tracker", "add_job", "mark_rejected", "add_hr_contact",
-                                                     "block_hot_job", "block_all_hot_jobs", "reject_remote_job",
-                                                     "reject_all_remote", "update_status"}, tools)
+            check("10 tools exposed", set(tools) == {"search_tracker", "add_job", "mark_rejected", "add_hr_contact",
+                                                      "block_hot_job", "block_all_hot_jobs", "reject_remote_job",
+                                                      "reject_all_remote", "update_status", "mark_people_contacted"}, tools)
             check("add_job schema has company + status", {"company", "status"} <= set(tools["add_job"].inputSchema["properties"]))
 
             async def call(tool_name, **kw):
