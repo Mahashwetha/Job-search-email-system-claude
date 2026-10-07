@@ -3,39 +3,52 @@ name: resume-tailor
 description: This skill should be used when the user wants to tailor or customize their resume for a specific job or company. Triggers on phrases like "tailor resume for [company]", "customize resume for [job]", "generate resume for [company]", "adapt resume to this job posting", "create resume for [company] role".
 ---
 
-# Resume Tailor
+# Resume Tailor (evidence-only, with skill confirmation)
 
-Generate a per-company tailored resume using Gemini 2.5 Flash via `resume_tailor.py`.
+Tailors the current CV DOCX for one job using `cv_tailor.py`. Claude does the comparison and asks
+the user which missing skills they really have; the script applies the edits and exports DOCX + PDF.
+No Gemini call, so it uses none of the 20/day free quota.
 
-## How to run
+## Steps
 
-For a single job, run `resume_tailor.py` with the job posting URL and company name as arguments.
+1. **Get the job description.** Run `python cv_tailor.py jd "<url>"`. If it fails (login walls,
+   JS-only pages), ask the user to paste the description.
+2. **Read the CV.** Run `python cv_tailor.py cv` (prints each paragraph of the base CV DOCX).
+3. **Compare.** List the JD's skills/requirements, in English even if the JD is French. Split them into:
+   - already on the CV (nothing to do, or surface better wording if the evidence is there)
+   - missing from the CV
+4. **Ask with multi-select.** Use AskUserQuestion with `multiSelect: true`: up to 4 questions of up
+   to 4 missing skills each, mandatory JD skills first. Question text like "Which of these have you
+   used in real work?". The user can type extra detail in "Other" (e.g. the tool they used).
+   If a confirmed skill needs context to be described honestly (where/how), ask a short follow-up.
+5. **Draft edits** (rules below) and write them to a JSON file in the scratchpad:
+   `{"replace": [{"old": "...", "new": "..."}], "add_skills": ["..."]}`.
+   Each `old` must sit inside ONE run of the DOCX. Bold highlights are separate runs, so keep each
+   edit within a plain or a bold segment of the paragraph text from step 2.
+6. **Apply.** Run `python cv_tailor.py apply "<Company>" <edits.json>`.
+7. **Report** a before/after table of every edit, the confirmed skills added, the page count,
+   the JD skills still missing, and the output paths.
 
-For batch mode (all companies with status `done` and non-LinkedIn links in the tracker), run it with no arguments.
+## Edit rules
+
+- Only facts on the CV or confirmed by the user in step 4. Never invent tools, numbers or domains.
+- Keep content intact: never delete Projects, the NDS acquisition note, education details or the
+  word "fintech" in the SMARTS bullet. No "| Fintech" in the title line.
+- Confirmed skills go into the `Frameworks & Tools:` line via `add_skills`, not into a specific
+  job's bullet, unless the user said where they used it.
+- Never write "learning / deepening / upskilling in X" for a gap.
+- English only. Do not switch to the JD's language.
+- Going over 1 page is acceptable. Prefer edits that don't add lines, and say when the CV grows.
 
 ## Output
 
-Saved to the `resume_adjusted/` folder configured in `config.py`, named `resume_{CompanyName}.docx`. The script skips a company if the file already exists — delete the file to regenerate it.
+`resume_adjusted\resume_<company>.docx` and `.pdf` (folder from `RESUME_OUTPUT_DIR` in `config.py`).
+An existing file with the same name is overwritten.
 
-## What it does
+Base CV: `Resume2026\SingleBlockResume- 2026augnew\Mahashwetha_resume_2026_centurygothic_aug.docx`
+(override with `BASE_CV_DOCX` in `config.py`). PDF export needs Microsoft Word.
 
-Fetches the job description from the URL, reads the base resume, and asks Gemini to suggest minimal tweaks — reordering skills, surfacing existing keywords. It never fabricates experience. Gemini's markdown formatting (`**bold**`) is stripped automatically before writing to the DOCX.
+## Legacy
 
-## Site compatibility
-
-Most standard job pages work. Workday works via JSON-LD extraction. Ashby and internal portals (like BPCE) may fail — in that case, skip the URL and tailor manually, or paste the job description text into a temp file and adjust the call.
-
-LinkedIn URLs are skipped automatically in batch mode.
-
-## If you hit rate limits
-
-The free Gemini tier occasionally returns 429 errors — the script retries automatically. If it keeps failing, wait a minute and re-run. Use `gemini-2.5-flash`, not `gemini-2.0-flash` (that quota runs out faster).
-
-## Note: on-demand only
-
-Resume tailor is NOT part of the daily job search run — controlled by `RESUME_TAILOR_ENABLED` in `config.py` (default: False).
-
-When the user asks to tailor a resume:
-1. Set `RESUME_TAILOR_ENABLED = True` in `config.py`
-2. Run the tailor
-3. Set `RESUME_TAILOR_ENABLED = False` in `config.py` again
+`resume_tailor.py` (Gemini, batch from tracker) targets the OLD CV layout (fixed paragraph
+numbers) and a PDF base path, so it does not work with the current CV. Use the steps above.
