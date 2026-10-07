@@ -26,7 +26,7 @@ No Gemini call, so it uses none of the 20/day free quota.
    Each `old` must sit inside ONE run of the DOCX. Bold highlights are separate runs, so keep each
    edit within a plain or a bold segment of the paragraph text from step 2.
 6. **Apply.** Run `python cv_tailor.py apply "<Company>" <edits.json>`.
-7. **Report** a before/after table of every edit, the confirmed skills added, the page count,
+7. **Report** the "Words changed" output from `apply` (shown as removed -> added), the confirmed skills added, the page count,
    the JD skills still missing, and the output paths.
 
 ## Edit rules

@@ -85,6 +85,26 @@ def _export_pdf(docx_path):
     return pages
 
 
+def word_diff(base_path, new_path):
+    """Changed words per paragraph: [-removed-] {+added+}."""
+    import difflib
+    base = [p.text for p in Document(base_path).paragraphs]
+    new = [p.text for p in Document(new_path).paragraphs]
+    for i, (a, b) in enumerate(zip(base, new)):
+        if a == b:
+            continue
+        aw, bw = a.split(), b.split()
+        parts = []
+        for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, aw, bw).get_opcodes():
+            if op == "equal":
+                continue
+            ctx = " ".join(aw[max(0, i1 - 2):i1])
+            old = " ".join(aw[i1:i2])
+            new_ = " ".join(bw[j1:j2])
+            parts.append(f"...{ctx} " + (f"[-{old}-] " if old else "") + (f"{{+{new_}+}}" if new_ else ""))
+        print(f"Para {i}: " + "  |  ".join(parts))
+
+
 def cmd_apply(company, edits_path):
     from resume_tailor import safe_company_name
     with open(edits_path, encoding="utf-8") as f:
@@ -99,7 +119,8 @@ def cmd_apply(company, edits_path):
     out = os.path.join(config.RESUME_OUTPUT_DIR, f"resume_{safe_company_name(company)}.docx")
     doc.save(out)
     pages = _export_pdf(out)
-    print(f"Saved: {out}\nSaved: {out[:-5]}.pdf\nPages: {pages}")
+    print(f"Saved: {out}\nSaved: {out[:-5]}.pdf\nPages: {pages}\n\nWords changed:")
+    word_diff(BASE_CV_DOCX, out)
 
 
 def main():
