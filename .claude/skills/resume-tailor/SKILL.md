@@ -11,8 +11,10 @@ No Gemini call, so it uses none of the 20/day free quota.
 
 ## Steps
 
-1. **Get the job description.** Run `python cv_tailor.py jd "<url>"`. If it fails (login walls,
-   JS-only pages), ask the user to paste the description.
+1. **Get the job description.** Run `python cv_tailor.py jd "<url>"`. Any job link works: LinkedIn,
+   Welcome to the Jungle, Ashby and Greenhouse use the site's own data for a clean description;
+   other sites (company career pages, Workday, etc.) fall back to reading the page. If it fails
+   (login walls, closed jobs), ask the user to paste the description.
 2. **Read the CV.** Run `python cv_tailor.py cv` (prints each paragraph of the base CV DOCX).
 3. **Compare.** List the JD's skills/requirements, in English even if the JD is French. Split them into:
    - already on the CV (nothing to do, or surface better wording if the evidence is there)
