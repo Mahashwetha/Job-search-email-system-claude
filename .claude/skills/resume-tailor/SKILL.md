@@ -6,7 +6,7 @@ description: This skill should be used when the user wants to tailor or customiz
 # Resume Tailor (evidence-only, with skill confirmation)
 
 Tailors the current CV DOCX for one job using `cv_tailor.py`. Claude does the comparison and asks
-the user which missing skills they really have; the script applies the edits and exports DOCX + PDF.
+the user which missing skills they really have; the script applies the edits and exports a PDF (the temporary DOCX is deleted).
 No Gemini call, so it uses none of the 20/day free quota.
 
 ## Steps
@@ -38,17 +38,24 @@ No Gemini call, so it uses none of the 20/day free quota.
   word "fintech" in the SMARTS bullet. No "| Fintech" in the title line.
 - Confirmed skills go into the `Frameworks & Tools:` line via `add_skills`, not into a specific
   job's bullet, unless the user said where they used it.
+- "Claude Code hooks (guardrails)" is added to the AI skills line of EVERY tailored CV by `apply`
+  (`CV_ALWAYS_AI_SKILLS` in `config.py`; `AI & Upskilling:` on the main CV, `AI & LLM:` on the AI CV).
+  Don't put it in `add_skills` or a `replace` yourself. Mention it in the step 7 report.
 - Never write "learning / deepening / upskilling in X" for a gap.
 - English only. Do not switch to the JD's language.
 - Going over 1 page is acceptable. Prefer edits that don't add lines, and say when the CV grows.
 
 ## Output
 
-`resume_adjusted\resume_<company>.docx` and `.pdf` (folder from `RESUME_OUTPUT_DIR` in `config.py`).
+`resume_adjusted\resume_<company>.pdf` only (folder from `RESUME_OUTPUT_DIR` in `config.py`).
 An existing file with the same name is overwritten.
 
 Base CV: `BASE_CV_DOCX` in `config.py`
 (override with `BASE_CV_DOCX` in `config.py`). PDF export needs Microsoft Word.
+
+AI-focused roles ("use AI resume"): prefix both `cv` and `apply` with the env var
+`BASE_CV_DOCX="<path>"`, where `<path>` is `BASE_CV_DOCX_AI` in `config.py`.
+It has an `AI & LLM:` skills line; put confirmed AI skills there with a `replace`, not `add_skills`.
 
 ## Legacy
 

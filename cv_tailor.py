@@ -32,8 +32,15 @@ except ImportError:
     print("ERROR: config.py not found!")
     sys.exit(1)
 
-BASE_CV_DOCX = getattr(config, "BASE_CV_DOCX", os.path.join(os.path.expanduser("~"), "resume.docx"))
-SKILLS_LABEL = "Frameworks & Tools:"
+BASE_CV_DOCX = os.environ.get("BASE_CV_DOCX") or getattr(
+    config, "BASE_CV_DOCX", os.path.join(os.path.expanduser("~"), "resume.docx"))
+SKILLS_LABEL = getattr(config, "CV_SKILLS_LABEL", "Frameworks & Tools:")
+# Skills added to the AI skills line of EVERY tailored CV. Empty by default: list only skills you really have.
+ALWAYS_AI_SKILLS = list(getattr(config, "CV_ALWAYS_AI_SKILLS", []))
+AI_LABELS = tuple(getattr(config, "CV_AI_LABELS", ("AI & ", "AI:", "AI Skills")))
+# True: the '  |  ...' tail of the AI line is replaced by ALWAYS_AI_SKILLS (keeps the line short).
+# False (default): the skills are inserted before the '|' and the tail is kept.
+REPLACE_AI_TAIL = getattr(config, "CV_REPLACE_AI_TAIL", False)
 NL = "\n"
 
 
@@ -163,6 +170,29 @@ def _add_skills(doc, skills):
     last.text = last.text.rstrip() + ", " + ", ".join(skills)
 
 
+def _add_always_ai_skills(doc):
+    """Add ALWAYS_AI_SKILLS (config CV_ALWAYS_AI_SKILLS) to the first line starting with one of AI_LABELS.
+    With CV_REPLACE_AI_TAIL the '  |  ...' tail of that line is replaced by the skills, otherwise
+    they go before the '|'. Tailored copies only; the base CV is never modified. Skips skills already present."""
+    if not ALWAYS_AI_SKILLS:
+        return
+    p = next((p for p in doc.paragraphs if p.text.strip().startswith(AI_LABELS)), None)
+    if p is None:
+        print("NOTE: no AI skills line found; ALWAYS_AI_SKILLS not added")
+        return
+    todo = [s for s in ALWAYS_AI_SKILLS if s.lower() not in p.text.lower()]
+    if not todo:
+        return
+    value_runs = [r for r in p.runs if r.text.strip()][1:] or [r for r in p.runs if r.text.strip()]
+    for r in value_runs:                                   # the run holding the '|' separator, if any
+        if "|" in r.text:
+            head, sep, tail = r.text.partition("|")
+            r.text = head.rstrip() + ", " + ", ".join(todo) + ("" if REPLACE_AI_TAIL else "  " + sep + tail)
+            return
+    last = value_runs[-1]
+    last.text = last.text.rstrip() + ", " + ", ".join(todo)
+
+
 def _export_pdf(docx_path):
     import win32com.client
     word = win32com.client.DispatchEx("Word.Application")
@@ -206,13 +236,15 @@ def cmd_apply(company, edits_path):
         _replace_in_runs(doc, e["old"], e["new"])
     if edits.get("add_skills"):
         _add_skills(doc, edits["add_skills"])
+    _add_always_ai_skills(doc)
 
     os.makedirs(config.RESUME_OUTPUT_DIR, exist_ok=True)
     out = os.path.join(config.RESUME_OUTPUT_DIR, f"resume_{safe_company_name(company)}.docx")
     doc.save(out)
     pages = _export_pdf(out)
-    print(f"Saved: {out}{NL}Saved: {out[:-5]}.pdf{NL}Pages: {pages}{NL}{NL}Words changed:")
+    print(f"Saved: {out[:-5]}.pdf{NL}Pages: {pages}{NL}{NL}Words changed:")
     word_diff(BASE_CV_DOCX, out)
+    os.remove(out)  # only the PDF is kept
 
 
 def main():

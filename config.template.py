@@ -133,4 +133,11 @@ COVER_LETTER_HEADER = 'City, Country  |  +00 0 00 00 00 00  |  your_email@gmail.
 
 # Base CV for cv_tailor.py and plain-text resume fallback for fit_scorer.py
 BASE_CV_DOCX = r'C:\Path\To\Your\Resume.docx'
+BASE_CV_DOCX_AI = r'C:\Path\To\Your\AI_Resume.docx'   # optional second CV for AI-focused roles
 QUICK_INTRO_PATH = r'C:\Path\To\Your\resume_summary.txt'
+
+# cv_tailor.py layout settings. Match these to the line labels in YOUR CV.
+CV_SKILLS_LABEL = 'Frameworks & Tools:'        # line where confirmed skills ("add_skills") are appended
+CV_ALWAYS_AI_SKILLS = []                       # skills added to every tailored CV; only ones you really have
+CV_AI_LABELS = ('AI & ', 'AI:', 'AI Skills')   # start of the line CV_ALWAYS_AI_SKILLS go into
+CV_REPLACE_AI_TAIL = False                     # True: drop the '  |  ...' tail of that line to save space

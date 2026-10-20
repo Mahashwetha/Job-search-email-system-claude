@@ -383,6 +383,8 @@ python fit_check.py "<job_url>" [--title "..."] [--company "..."]
 
 ## Resume Tailor
 
+> **Reference implementation.** `cv_tailor.py` (used by the `resume-tailor` skill) is built around the author's own CV layout. It expects a `.docx` CV with a skills line such as `Frameworks & Tools:`, and PDF export needs Microsoft Word on Windows. Before using it, set `BASE_CV_DOCX` and the `CV_*` settings in `config.py` (see `config.template.py`) to match your CV. `CV_ALWAYS_AI_SKILLS` is empty by default, so no skill is added to your CV unless you list it.
+
 Generates per-company tailored resumes using **Gemini 2.5 Flash** (free tier). **Runs on demand only** — disabled in the daily pipeline by default to preserve Gemini quota. Toggle with `RESUME_TAILOR_ENABLED` in `config.py` (same pattern as `FIT_SCORE_ENABLED`). When using the `resume-tailor` skill, Claude auto-enables the flag, runs the tailor, then switches it back off.
 
 **What it does:**
