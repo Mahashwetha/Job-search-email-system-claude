@@ -84,7 +84,7 @@ SUBJECT: {subject}
 ```
 
 ### Step 2 — Send automatically
-For each draft, send via `send_outreach_emails.py` (or an equivalent direct SMTP send using `email_cold_outreach_template.txt` + the tracker role lookup) — no confirmation prompt, no dry-run-to-self step.
+For each draft, send via `send_outreach_emails.py` (or an equivalent direct SMTP send of the draft's own SUBJECT/body, which was built from `email_followup_template.txt` for tracked roles or `email_cold_outreach_spontaneous_template.txt` otherwise; never `email_cold_outreach_template.txt`) — no confirmation prompt, no dry-run-to-self step.
 
 Do NOT send, and instead note as skipped in the receipt (see Step 4), if:
 - The contact's email is **flagged undeliverable/invalid by Hunter (or any verifier)**. Confirmed 2026-08-17: `cecile.grondin@netatmo.com` was flagged "undeliverable" by Hunter, sent anyway, and did in fact bounce/get flagged by Netatmo's mail server — so trust the verifier's "invalid/undeliverable" status and skip rather than guess-and-send.

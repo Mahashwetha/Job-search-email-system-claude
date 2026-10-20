@@ -93,15 +93,30 @@ def extract_url(value):
     return m.group(1) if m else text
 
 
+_ASHBY_ID = re.compile(r"(?:[?&]ashby_jid=|jobs\.ashbyhq\.com/[^/]+/)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})")
+_GREENHOUSE_ID = re.compile(r"(?:[?&]gh_jid=|greenhouse\.io/[^/]+/jobs/)(\d+)")
+_QUERY_JOB_ID = re.compile(r"[?&]((?:offreid|jk)=[^&#]+)")
+
+
 def norm_url(url):
-    """Compare job links ignoring scheme, www, query string, trailing slash and /thanks, /application."""
+    """Compare job links ignoring scheme, www, query string, trailing slash and /thanks, /application.
+    Ashby and Greenhouse links reduce to their job ID, so a company-site link (?ashby_jid=, ?gh_jid=)
+    matches the ATS board link for the same posting."""
     u = cell_text(url).lower()
     if not u.startswith(("http://", "https://")):
         return u
+    m = _ASHBY_ID.search(u)
+    if m:
+        return "ashby:" + m.group(1)
+    m = _GREENHOUSE_ID.search(u)
+    if m:
+        return "greenhouse:" + m.group(1)
     u = re.sub(r"^https?://(www\.)?", "", u)
+    # some boards (Cadremploi ?offreId=, Indeed ?jk=) carry the job ID in the query: keep it
+    job_id = _QUERY_JOB_ID.search(u.split("#")[0])
     u = u.split("?")[0].split("#")[0].rstrip("/")
     u = re.sub(r"/(thanks|application|apply)$", "", u)
-    return u
+    return u + ("?" + job_id.group(1) if job_id else "")
 
 
 def rows(wb):

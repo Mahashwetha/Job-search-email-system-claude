@@ -9,7 +9,10 @@ Rules enforced in code:
   - same job URL already tracked -> refused, prints the existing row
   - company already tracked with other roles -> refused unless --force, prints existing rows
   - takes the shared tracker lock and backs up List.xlsx before writing
-Exit codes: 0 added, 2 duplicate URL, 3 company exists (use --force), 1 error.
+  - cold outreach (no specific role) is refused: it is a set of contacts, not an application (her rule, 2026-10-20).
+    Note it on the company's latest job row (add_hr_contact.py + update_status.py --note), or add it to the
+    "Outreach" sheet when the company has no job rows.
+Exit codes: 0 added, 2 duplicate URL, 3 company exists (use --force), 4 cold outreach refused, 1 error.
 """
 import argparse
 import os
@@ -32,6 +35,12 @@ def main():
     if a.status not in T.VALID_STATUSES:
         print(f"ERROR: status must be one of {sorted(T.VALID_STATUSES)} (got '{a.status}')")
         return 1
+
+    if "cold outreach" in f"{a.role} {a.comment}".lower() or "no specific role" in a.role.lower():
+        print("REFUSED: cold outreach is not a job application, so it never gets its own Sheet1 row.\n"
+              "  - company has job rows -> add_hr_contact.py --row <latest> + update_status.py --row <latest> --note ...\n"
+              "  - no job rows          -> add it to the 'Outreach' sheet of List.xlsx")
+        return 4
 
     with T.tracker_lock():
         wb = T.load()

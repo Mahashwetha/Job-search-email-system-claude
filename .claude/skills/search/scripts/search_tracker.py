@@ -34,7 +34,13 @@ def company_from_page(url):
         title = re.search(r"<title[^>]*>(.*?)</title>", html, re.S | re.I)
         if not title:
             return None
-        parts = re.split(r"\s[-|–@]\s|\sat\s|\schez\s", title.group(1).strip())
+        import html as _html
+        t = _html.unescape(title.group(1)).strip()
+        # Free-Work: "Company — Offre d'emploi Role | Free-work"
+        m = re.match(r"^(.+?)\s+—\s+(offre d'emploi|job offer)", t, re.I)
+        if m:
+            return m.group(1).strip()
+        parts = re.split(r"\s[-|–—@]\s|\sat\s|\schez\s", t)
         return parts[1].strip() if len(parts) > 1 else None
     except Exception:
         return None
