@@ -573,12 +573,21 @@ def fetch_wttj_jobs(query, max_pages=3):
     return jobs
 
 
+BUILTIN_MAX_DETAIL = 10      # job pages opened per search (each one is a request; too many trips Cloudflare)
+BUILTIN_DETAIL_PAUSE = 1.0   # seconds between job-page requests
+_builtin_blocked = False     # set once BuiltIn answers 429 / Cloudflare challenge: stop for the rest of the run
+
+
 def fetch_builtin_job_location(job_url):
     """Fetch actual location from a BuiltIn job detail page."""
+    global _builtin_blocked
     try:
         import re as _re
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         resp = requests.get(job_url, headers=headers, timeout=10)
+        if resp.status_code == 429 or 'Just a moment' in resp.text[:2000]:
+            _builtin_blocked = True
+            return ''
         if resp.status_code != 200:
             return ''
         # Look for location in meta or visible text patterns
@@ -602,26 +611,32 @@ def fetch_builtin_jobs(query):
     Returns only jobs actually located in France/Europe.
     """
     jobs = []
+    if _builtin_blocked:
+        return jobs
     try:
+        import time as _time
         clean_query = query.replace('+', ' ')
-        url = 'https://builtin.com/jobs/eu/france'
+        # 2026-10-19: /jobs/eu/france?search= started returning mostly Singapore/HK jobs; the country
+        # filter on /jobs returns France ones.
+        url = 'https://builtin.com/jobs'
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'text/html',
         }
-        resp = requests.get(url, params={'search': clean_query}, headers=headers, timeout=15)
+        resp = requests.get(url, params={'search': clean_query, 'country': 'FRA'}, headers=headers, timeout=15)
         if resp.status_code != 200:
+            print(f'  BuiltIn search HTTP {resp.status_code} ({query})')
             return jobs
         import re as _re
-        slugs = _re.findall(r'href="(/job/[^"]+)"', resp.text)
-        seen = set()
+        slugs = list(dict.fromkeys(_re.findall(r'href="(/job/[^"]+)"', resp.text)))[:BUILTIN_MAX_DETAIL]
         for slug in slugs:
             job_url = f'https://builtin.com{slug}'
-            if job_url in seen:
-                continue
-            seen.add(job_url)
+            _time.sleep(BUILTIN_DETAIL_PAUSE)
             # Verify actual location — only accept France/Paris/Remote/EMEA
             actual_loc = fetch_builtin_job_location(job_url)
+            if _builtin_blocked:
+                print('  BuiltIn: rate-limited (429 / Cloudflare challenge), skipping BuiltIn for the rest of this run')
+                break
             loc_lower = actual_loc.lower()
             allowed = (
                 'france', 'paris', 'remote', 'emea', 'europe',
@@ -986,7 +1001,8 @@ def fetch_hot_jobs(tracker):
     save_hot_jobs_current(ordered)
 
     source_warnings = [
-        source for source, count in _source_counts.items() if count == 0
+        (f"{source} (rate-limited by Cloudflare)" if source == 'BuiltIn' and _builtin_blocked else source)
+        for source, count in _source_counts.items() if count == 0
     ]
     return ordered, source_warnings
 
