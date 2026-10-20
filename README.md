@@ -473,6 +473,39 @@ Each tracker skill runs a tested script (`.claude/skills/<skill>/scripts/`) buil
 
 Skills are version-controlled with the project and load automatically in every Claude Code session.
 
+## Claude Code Hooks (guardrails)
+
+Skills and memory tell Claude what to do, but they are instructions: in a long or fresh session a rule can be forgotten. A **hook** is a small script that **Claude Code itself runs automatically** at a fixed moment (here: before every shell command), so the rule is enforced every time, whether or not Claude remembers it.
+
+| Hook | Runs before | Blocks | Message shown |
+|---|---|---|---|
+| **Cold-outreach row guard** | any `python ... add_job.py ...` | adding a tracker row whose role is "Cold outreach" / "no specific role" | Outreach is contacts, not an application: note it on the company's latest job row (`add_hr_contact.py` + `update_status.py --note`), or use the **Outreach** sheet if the company has no job rows |
+| **Personal-data commit guard** | any `git commit` / `git push` | changes that **add** your email, phone number or home-folder paths (e.g. `C:\Users\<you>`) | file + what was found (value masked); move it to the gitignored `config.py` or a placeholder in `config.template.py` |
+
+How they work: Claude Code passes the pending command to the script as JSON on stdin. The script exits silently to allow it, or prints a `permissionDecision: "deny"` with a reason, and the command **never runs**. Only the matching commands are affected; everything else passes straight through. The commit guard checks only **added** lines (staged changes, files staged in the same command, or unpushed commits for a push), and can allow your email in a repo that shows it on purpose (e.g. your portfolio site).
+
+The cold-outreach rule is enforced twice: `add_job.py` itself refuses those rows (exit code 4), which covers every caller (skills, the MCP server, the email agent); the hook just stops the attempt one step earlier for Claude.
+
+**Setup** (user-level, so it applies in every session): put the scripts in `~/.claude/hooks/`, edit the personal-data patterns at the top of the commit guard (your email, phone, user folder), and register them in `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "python \"~/.claude/hooks/block_cold_outreach_row.py\"", "timeout": 10 },
+          { "type": "command", "command": "python \"~/.claude/hooks/block_personal_data_commit.py\"", "timeout": 30 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Test a hook without running the command: pipe a fake payload into it, e.g. `echo '{"tool_input":{"command":"git status"}}' | python ~/.claude/hooks/block_personal_data_commit.py` prints nothing (allowed); a blocked case prints the deny JSON. Keep hooks narrow and test them on real cases: a too-broad pattern blocks innocent work (the first version of the outreach guard also blocked notes that merely mentioned `add_job.py`). To pause hooks, remove the `"hooks"` block from `settings.json`.
+
 ## Tracker MCP Server & Email-Reply Agent
 
 The tracker is also available to AI agents through an **MCP server** (`tracker_mcp/server.py`, FastMCP). Its 9 tools are thin wrappers around the same skill scripts, so Claude Code skills and agents share one implementation and one set of safety rules:
