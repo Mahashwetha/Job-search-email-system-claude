@@ -95,7 +95,7 @@ def extract_url(value):
 
 _ASHBY_ID = re.compile(r"(?:[?&]ashby_jid=|jobs\.ashbyhq\.com/[^/]+/)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})")
 _GREENHOUSE_ID = re.compile(r"(?:[?&]gh_jid=|greenhouse\.io/[^/]+/jobs/)(\d+)")
-_QUERY_JOB_ID = re.compile(r"[?&]((?:offreid|jk)=[^&#]+)")
+_QUERY_JOB_ID = re.compile(r"[?&]((?:offreid|jk|ingeniance_job_id)=[^&#]+)")
 
 
 def norm_url(url):
@@ -112,7 +112,7 @@ def norm_url(url):
     if m:
         return "greenhouse:" + m.group(1)
     u = re.sub(r"^https?://(www\.)?", "", u)
-    # some boards (Cadremploi ?offreId=, Indeed ?jk=) carry the job ID in the query: keep it
+    # some boards (Cadremploi ?offreId=, Indeed ?jk=, Ingeniance ?ingeniance_job_id=) carry the job ID in the query: keep it
     job_id = _QUERY_JOB_ID.search(u.split("#")[0])
     u = u.split("?")[0].split("#")[0].rstrip("/")
     u = re.sub(r"/(thanks|application|apply)$", "", u)
