@@ -8,10 +8,16 @@ Usage:
   python cv_tailor.py jd <job-url>                 print the job description text
   python cv_tailor.py cv                           print the base CV, one paragraph per line
   python cv_tailor.py apply "<Company>" <edits.json>
+  python cv_tailor.py jds <out_dir> <url> [<url> ...]   fetch several JDs in parallel into out_dir/jd_<n>.txt
+  python cv_tailor.py apply-batch <batch.json> [--workers N]   build several tailored CVs in parallel
 
 edits.json:
   {"replace": [{"old": "exact text inside one run", "new": "replacement"}, ...],
    "add_skills": ["Cucumber (TDD)", "YourKit Java Profiler"]}
+
+batch.json (apply-batch):
+  [{"company": "Acme Backend", "edits": {...same as edits.json...}, "base": "main" | "ai"}, ...]
+  "base" picks BASE_CV_DOCX (default) or BASE_CV_DOCX_AI from config.py.
 
 Output: RESUME_OUTPUT_DIR/resume_<company>.docx + .pdf (PDF via Microsoft Word).
 """
@@ -122,8 +128,9 @@ def _site_jd(url):
     return ""
 
 
-def cmd_jd(url):
-    """Site API first (LinkedIn, WTTJ, Ashby, Greenhouse); otherwise the longest page-text extraction."""
+def get_jd(url):
+    """Site API first (LinkedIn, WTTJ, Ashby, Greenhouse); otherwise the longest page-text extraction.
+    Returns "" when nothing usable (< 200 chars) was found."""
     import fit_scorer
     import resume_tailor
     text = ""
@@ -139,10 +146,29 @@ def cmd_jd(url):
             except Exception:
                 pass
         text = max(texts, key=len, default="")
-    if len(text.strip()) < 200:
+    return text if len(text.strip()) >= 200 else ""
+
+
+def cmd_jd(url):
+    text = get_jd(url)
+    if not text:
         print("ERROR: could not fetch the job description. Paste it into the chat instead.")
         sys.exit(1)
     print(text)
+
+
+def cmd_jds(out_dir, urls):
+    """Fetch several JDs at once (threads: the work is network-bound). One file per URL, in input order."""
+    from concurrent.futures import ThreadPoolExecutor
+    os.makedirs(out_dir, exist_ok=True)
+    with ThreadPoolExecutor(max_workers=min(8, len(urls))) as ex:
+        texts = list(ex.map(get_jd, urls))
+    for n, (url, text) in enumerate(zip(urls, texts), 1):
+        path = os.path.join(out_dir, f"jd_{n}.txt")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(f"URL: {url}{NL}{NL}{text}")
+        status = f"{len(text)} chars" if text else "FAILED (paste it into the chat)"
+        print(f"jd_{n}: {status}  {path}  {url}")
 
 
 # ── CV editing ───────────────────────────────────────────────────────────────
@@ -227,24 +253,59 @@ def word_diff(base_path, new_path):
         print(f"Para {i}: " + "  |  ".join(parts))
 
 
-def cmd_apply(company, edits_path):
+def _build_docx(company, edits, base_path):
+    """Apply edits to a copy of base_path and save it as RESUME_OUTPUT_DIR/resume_<company>.docx."""
     from resume_tailor import safe_company_name
-    with open(edits_path, encoding="utf-8") as f:
-        edits = json.load(f)
-    doc = Document(BASE_CV_DOCX)
+    doc = Document(base_path)
     for e in edits.get("replace", []):
         _replace_in_runs(doc, e["old"], e["new"])
     if edits.get("add_skills"):
         _add_skills(doc, edits["add_skills"])
     _add_always_ai_skills(doc)
-
     os.makedirs(config.RESUME_OUTPUT_DIR, exist_ok=True)
     out = os.path.join(config.RESUME_OUTPUT_DIR, f"resume_{safe_company_name(company)}.docx")
     doc.save(out)
-    pages = _export_pdf(out)
+    return out
+
+
+def _report(out, pages, base_path):
     print(f"Saved: {out[:-5]}.pdf{NL}Pages: {pages}{NL}{NL}Words changed:")
-    word_diff(BASE_CV_DOCX, out)
+    word_diff(base_path, out)
     os.remove(out)  # only the PDF is kept
+
+
+def cmd_apply(company, edits_path):
+    with open(edits_path, encoding="utf-8") as f:
+        edits = json.load(f)
+    out = _build_docx(company, edits, BASE_CV_DOCX)
+    _report(out, _export_pdf(out), BASE_CV_DOCX)
+
+
+def cmd_apply_batch(batch_path, workers=3):
+    """Edit every CV first (fast, and an edit error stops the batch before any PDF is made), then
+    export the PDFs in parallel: each worker process drives its own Word instance."""
+    from concurrent.futures import ProcessPoolExecutor
+    with open(batch_path, encoding="utf-8") as f:
+        jobs = json.load(f)
+    bases = {"main": BASE_CV_DOCX, "ai": getattr(config, "BASE_CV_DOCX_AI", "")}
+    built = []
+    for j in jobs:
+        base = bases.get(j.get("base", "main"))
+        if not base or not os.path.exists(base):
+            raise SystemExit(f"ERROR: base CV {j.get('base')!r} not found for {j['company']!r}")
+        built.append((j["company"], _build_docx(j["company"], j.get("edits", {}), base), base))
+    with ProcessPoolExecutor(max_workers=max(1, min(workers, len(built)))) as ex:
+        futures = [ex.submit(_export_pdf, out) for _, out, _ in built]
+        results = []
+        for f in futures:
+            try:
+                results.append(f.result())
+            except Exception as e:  # a Word instance can fail under load: retry that one alone below
+                results.append(e)
+    for (company, out, base), res in zip(built, results):
+        pages = _export_pdf(out) if isinstance(res, Exception) else res
+        print(f"{NL}=== {company} ===")
+        _report(out, pages, base)
 
 
 def main():
@@ -256,6 +317,10 @@ def main():
         cmd_cv()
     elif args[:1] == ["apply"] and len(args) == 3:
         cmd_apply(args[1], args[2])
+    elif args[:1] == ["jds"] and len(args) >= 3:
+        cmd_jds(args[1], args[2:])
+    elif args[:1] == ["apply-batch"] and len(args) in (2, 4) and (len(args) == 2 or args[2] == "--workers"):
+        cmd_apply_batch(args[1], int(args[3]) if len(args) == 4 else 3)
     else:
         print(__doc__)
         sys.exit(1)

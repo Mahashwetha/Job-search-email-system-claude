@@ -9,6 +9,24 @@ Tailors the current CV DOCX for one job using `cv_tailor.py`. Claude does the co
 the user which missing skills they really have; the script applies the edits and exports a PDF (the temporary DOCX is deleted).
 No Gemini call, so it uses none of the 20/day free quota.
 
+**Several postings at once** (user gives 2+ URLs): use the batch flow below instead of repeating the steps per job.
+
+## Batch flow (several postings)
+
+1. `python cv_tailor.py jds <scratchpad>/jds <url1> <url2> ...` fetches all JDs in parallel into
+   `jd_1.txt`, `jd_2.txt`, ... (input order). For any line marked FAILED, open the page in the browser
+   or ask the user to paste it.
+2. Read the CV(s) once (`cv`, and the AI CV with `BASE_CV_DOCX=...` if any posting is AI-focused).
+3. Compare each JD (step 3 below). Ask ONE AskUserQuestion round for all jobs: merge the missing
+   skills across postings and ask each skill once (a confirmed skill counts for every job that needs it).
+4. Write `<scratchpad>/batch.json`:
+   `[{"company": "Acme Backend", "base": "main", "edits": {"replace": [...], "add_skills": [...]}}, ...]`
+   `base` is `main` (BASE_CV_DOCX) or `ai` (BASE_CV_DOCX_AI). Use a distinct `company` per posting
+   (e.g. company + role) so the PDFs don't overwrite each other.
+5. `python cv_tailor.py apply-batch <scratchpad>/batch.json` (optional `--workers N`, default 3).
+   All edits are checked before any PDF is made; PDFs export in parallel, one Word instance per worker.
+6. Report per job as in step 7 (one table per job is fine).
+
 ## Steps
 
 1. **Get the job description.** Run `python cv_tailor.py jd "<url>"`. Any job link works: LinkedIn,
