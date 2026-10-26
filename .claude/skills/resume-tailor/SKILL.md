@@ -59,6 +59,8 @@ No Gemini call, so it uses none of the 20/day free quota.
 - "Claude Code hooks (guardrails)" is added to the AI skills line of EVERY tailored CV by `apply`
   (`CV_ALWAYS_AI_SKILLS` in `config.py`; `AI & Upskilling:` on the main CV, `AI & LLM:` on the AI CV).
   Don't put it in `add_skills` or a `replace` yourself. Mention it in the step 7 report.
+- AI CV only: `apply` also runs `CV_AI_DEFAULT_REPLACE` from `config.py` (adds the weekly HR agent to the
+  job-search project bullet). Don't repeat it in your edits; mention it in the report.
 - Never write "learning / deepening / upskilling in X" for a gap.
 - English only. Do not switch to the JD's language.
 - Going over 1 page is acceptable. Prefer edits that don't add lines, and say when the CV grows.

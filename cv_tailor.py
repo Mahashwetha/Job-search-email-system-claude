@@ -47,6 +47,9 @@ AI_LABELS = tuple(getattr(config, "CV_AI_LABELS", ("AI & ", "AI:", "AI Skills"))
 # True: the '  |  ...' tail of the AI line is replaced by ALWAYS_AI_SKILLS (keeps the line short).
 # False (default): the skills are inserted before the '|' and the tail is kept.
 REPLACE_AI_TAIL = getattr(config, "CV_REPLACE_AI_TAIL", False)
+# Replacements applied to every CV built from BASE_CV_DOCX_AI (e.g. a project line kept out of the base file).
+# Same shape as edits.json "replace" items; an "old" text that isn't found is skipped with a note.
+AI_DEFAULT_REPLACE = list(getattr(config, "CV_AI_DEFAULT_REPLACE", []))
 NL = "\n"
 
 
@@ -262,6 +265,13 @@ def _build_docx(company, edits, base_path):
     if edits.get("add_skills"):
         _add_skills(doc, edits["add_skills"])
     _add_always_ai_skills(doc)
+    ai_base = getattr(config, "BASE_CV_DOCX_AI", "")
+    if ai_base and os.path.normcase(os.path.abspath(base_path)) == os.path.normcase(os.path.abspath(ai_base)):
+        for e in AI_DEFAULT_REPLACE:
+            try:
+                _replace_in_runs(doc, e["old"], e["new"])
+            except SystemExit:
+                print(f"NOTE: AI default edit skipped, text not found: {e['old']!r}")
     os.makedirs(config.RESUME_OUTPUT_DIR, exist_ok=True)
     out = os.path.join(config.RESUME_OUTPUT_DIR, f"resume_{safe_company_name(company)}.docx")
     doc.save(out)

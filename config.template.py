@@ -141,3 +141,7 @@ CV_SKILLS_LABEL = 'Frameworks & Tools:'        # line where confirmed skills ("a
 CV_ALWAYS_AI_SKILLS = []                       # skills added to every tailored CV; only ones you really have
 CV_AI_LABELS = ('AI & ', 'AI:', 'AI Skills')   # start of the line CV_ALWAYS_AI_SKILLS go into
 CV_REPLACE_AI_TAIL = False                     # True: drop the '  |  ...' tail of that line to save space
+
+# Optional: replacements applied to every CV built from BASE_CV_DOCX_AI (same shape as edits.json "replace" items),
+# e.g. to add a project line to AI-focused CVs without editing the base file. A missing "old" text is skipped.
+CV_AI_DEFAULT_REPLACE = []
