@@ -24,54 +24,51 @@ LOCATION = USER_PROFILE.get('location', 'City, Country')
 _BACKGROUND = USER_PROFILE.get('background', 'a software engineer')
 _DOMAIN = USER_PROFILE.get('domain_expertise', 'software development')
 _NAME = USER_PROFILE.get('name', 'Your Name')
-_ORIGIN = USER_PROFILE.get('origin_country', '')
+_PROOF_POINT = USER_PROFILE.get('proof_point', 'delivered production systems at scale')
 
 # --- Templates (all personal info comes from USER_PROFILE in config.py) ---
 
 SHORT_SINGLE_ROLE = (
     "Hi {first_name}, I applied for the {role} role at {company}.\n"
-    "With {years}+ yrs in {domain}, I believe I'm a strong fit.\n"
-    "Could you check on my application or direct me to the right person?\n"
-    "My Professional background:{linkedin}\n"
-    "Thanks & regards, {user_name}"
+    "{years}+ yrs in {domain}; I {proof_point}.\n"
+    "Open to a short call when suitable, or could you redirect me?\n"
+    "{linkedin}\n"
+    "{user_name}"
 )
 
 SHORT_MULTI_ROLE_ALL = (
     "Hi {first_name}, I applied for {roles_csv} at {company}.\n"
-    "With {years}+ yrs in {domain}, I believe I'm a strong fit.\n"
-    "Could you check on my application or direct me to the right person?\n"
-    "My Professional background:{linkedin}\n"
-    "Thanks & regards, {user_name}"
+    "{years}+ yrs in {domain}; I {proof_point}.\n"
+    "Open to a short call when suitable, or could you redirect me?\n"
+    "{linkedin}\n"
+    "{user_name}"
 )
 
 SHORT_MULTI_ROLE_SUMMARY = (
     "Hi {first_name}, I applied for {count} roles at {company} "
     "including {first_role}.\n"
-    "With {years}+ yrs in {domain}, could you check on my application "
-    "or direct me to the right person?\n"
-    "My Professional background:{linkedin}\n"
-    "Thanks & regards, {user_name}"
+    "{years}+ yrs in {domain}; I {proof_point}.\n"
+    "Open to a short call when suitable, or could you redirect me?\n"
+    "{linkedin}\n"
+    "{user_name}"
 )
 
 LONG_TEMPLATE = (
     "Hi [Name],\n\n"
-    "My name is {user_name}. I am from {origin_country}, currently based in {location}.\n\n"
-    "{{role_section}}\n\n"
-    "With {years}+ years of experience in {domain}, I am confident my profile "
-    "aligns well with what {{company}} is looking for.\n\n"
-    "You can find my professional background here: {linkedin}\n\n"
-    "I would be grateful if you could kindly check on the status of my application. "
-    "If this does not fall under your purview, I would appreciate being redirected "
-    "to the right person who handles these roles.\n\n"
-    "Thank you for your time and consideration.\n\n"
+    "{{role_section}} I have {years}+ years in {domain}, and most recently I {proof_point}.\n\n"
+    "I'm based in {location}, with full right to work and no sponsorship needed. "
+    "Background: {linkedin}\n\n"
+    "Would you be open to a short call at your earliest convenience? If easier, feel free "
+    "to share a link where I can book a slot. If this isn't under your purview, I'd be "
+    "grateful to be pointed to the right person.\n\n"
     "Best regards,\n"
     "{user_name}"
 ).format(
     user_name=_NAME,
-    origin_country=_ORIGIN,
     location=LOCATION,
     years=EXPERIENCE_YEARS,
     domain=_DOMAIN,
+    proof_point=_PROOF_POINT,
     linkedin=LINKEDIN_URL,
 )
 
@@ -183,6 +180,7 @@ def _draft_short_message(company, roles, contact_name):
         'years': EXPERIENCE_YEARS,
         'background': _BACKGROUND,
         'domain': _DOMAIN,
+        'proof_point': _PROOF_POINT,
         'linkedin': LINKEDIN_URL,
         'user_name': _NAME,
     }
