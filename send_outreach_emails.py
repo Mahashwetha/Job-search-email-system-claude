@@ -71,6 +71,20 @@ def find_role_in_tracker(company):
     return None
 
 
+# Role titles matching this get the AI-flavored follow-up (LLM work leads, NASDAQ second)
+AI_ROLE_PATTERN = re.compile(
+    r'\b(ai|ia|ml|llm|llms|genai|gen ai|mlops|machine learning|deep learning|nlp|agentic)\b',
+    re.IGNORECASE,
+)
+
+
+def followup_template_for(role):
+    """Pick the follow-up template for an already-applied role."""
+    if AI_ROLE_PATTERN.search(role):
+        return 'email_followup_ai_template.txt'
+    return 'email_followup_template.txt'
+
+
 def load_template(name):
     path = os.path.join(TEMPLATE_DIR, name)
     with open(path, encoding='utf-8') as f:
@@ -140,14 +154,14 @@ def main():
     if args.role:
         role = args.role
         print(f"Role override: {role}")
-        template_file = 'email_followup_template.txt'
-        print(f"Using follow-up template (already applied)")
+        template_file = followup_template_for(role)
+        print(f"Using {template_file} (already applied)")
     else:
         role = find_role_in_tracker(args.company)
         if role:
             print(f"Found in tracker: {args.company} | {role}")
-            template_file = 'email_followup_template.txt'
-            print(f"Using follow-up template (already applied)")
+            template_file = followup_template_for(role)
+            print(f"Using {template_file} (already applied)")
         else:
             role = ''
             print(f"Not in tracker: {args.company} -> using spontaneous template")

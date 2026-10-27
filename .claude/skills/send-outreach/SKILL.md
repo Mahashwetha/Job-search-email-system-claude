@@ -49,7 +49,7 @@ Add `--cc "[CC_EMAIL]"` if a CC was provided.
 ## What the script does automatically
 
 - Looks up the role from `List.xlsx` (matches company name, status = `done`)
-- If found in tracker (role known/overridden) → status=done means already applied, so it uses `email_followup_template.txt` ("I recently applied for the {role} role...") — never the agency-flavored cold outreach template
+- If found in tracker (role known/overridden) → status=done means already applied, so it uses `email_followup_template.txt` ("I recently applied for the {role} role...") — never the agency-flavored cold outreach template. If the role title mentions AI/IA/ML/LLM/GenAI/NLP/agentic (see `AI_ROLE_PATTERN`), it uses `email_followup_ai_template.txt` instead, which leads with the LLM projects
 - If not in tracker → sets role to `[Company] opportunities` and uses `email_cold_outreach_spontaneous_template.txt`
 - Attaches both PDFs from `resume/` folder
 - Shows full preview before sending
@@ -84,7 +84,7 @@ SUBJECT: {subject}
 ```
 
 ### Step 2 — Send automatically
-For each draft, send via `send_outreach_emails.py` (or an equivalent direct SMTP send of the draft's own SUBJECT/body, which was built from `email_followup_template.txt` for tracked roles or `email_cold_outreach_spontaneous_template.txt` otherwise; never `email_cold_outreach_template.txt`) — no confirmation prompt, no dry-run-to-self step.
+For each draft, send via `send_outreach_emails.py` (or an equivalent direct SMTP send of the draft's own SUBJECT/body, which was built from `email_followup_template.txt` (or `email_followup_ai_template.txt` for AI roles) for tracked roles or `email_cold_outreach_spontaneous_template.txt` otherwise; never `email_cold_outreach_template.txt`) — no confirmation prompt, no dry-run-to-self step.
 
 Do NOT send, and instead note as skipped in the receipt (see Step 4), if:
 - The contact's email is **flagged undeliverable/invalid by Hunter (or any verifier)**. Confirmed 2026-08-17: `cecile.grondin@netatmo.com` was flagged "undeliverable" by Hunter, sent anyway, and did in fact bounce/get flagged by Netatmo's mail server — so trust the verifier's "invalid/undeliverable" status and skip rather than guess-and-send.
