@@ -376,13 +376,26 @@ def fetch_jobicy():
 
 
 def fetch_weworkremotely():
-    """Fetch jobs from We Work Remotely RSS feeds (programming + devops)."""
+    """Fetch jobs from We Work Remotely RSS feeds (all jobs + full-stack, back-end, product).
+
+    WWR tags most jobs 'Anywhere in the World' even when the description says US-only,
+    so the description is checked: US/Americas signals with no Europe signal -> skipped.
+    """
     jobs = []
     feeds = [
+        'https://weworkremotely.com/remote-jobs.rss',  # all categories (catches AI roles)
+        'https://weworkremotely.com/categories/remote-full-stack-programming-jobs.rss',
         'https://weworkremotely.com/categories/remote-back-end-programming-jobs.rss',
-        'https://weworkremotely.com/categories/remote-programming-jobs.rss',
+        'https://weworkremotely.com/categories/remote-product-jobs.rss',
     ]
+    us_desc_re = re.compile(
+        r'\b(united states|u\.s\.|usa|us-based|us only|canada|north america|americas|latam)\b')
+    eu_desc_re = re.compile(
+        r'\b(europe|european|emea|cet|france|uk|united kingdom|germany|spain|portugal|ireland|'
+        r'netherlands|belgium|utc\+[0-4]|gmt\+[0-2]|any location)\b')
+    us_caps_re = re.compile(r'\bUS\b')  # case-sensitive: "US Benefits", "US salary range"
     seen_guids = set()
+    skipped_us = 0
     for feed_url in feeds:
         try:
             resp = requests.get(
@@ -415,6 +428,15 @@ def fetch_weworkremotely():
                 if country and country not in region:
                     location = f"{region}, {country}"
 
+                raw_desc = re.sub(r'<[^>]+>', ' ', item.findtext('description', ''))
+                desc = raw_desc.lower()
+                if 'anywhere' in region.lower():
+                    has_us_desc = bool(us_desc_re.search(desc) or us_caps_re.search(raw_desc))
+                    has_eu_desc = bool(eu_desc_re.search(desc))
+                    if has_us_desc and not has_eu_desc:
+                        skipped_us += 1
+                        continue
+
                 pub_date = item.findtext('pubDate', '')
                 posted = ''
                 if pub_date:
@@ -429,13 +451,16 @@ def fetch_weworkremotely():
                     'url': guid or item.findtext('link', ''),
                     'source': 'WWR',
                     'location': location,
-                    'tags': item.findtext('category', ''),
+                    # WWR files backend roles (e.g. Dremio Java) under "Full-Stack Programming";
+                    # drop that category so ROLE_EXCLUDE 'full-stack' only applies to titles
+                    'tags': '' if 'full-stack' in item.findtext('category', '').lower()
+                            else item.findtext('category', ''),
                     'posted_date': posted,
                 })
         except Exception as e:
             print(f"  WWR error ({feed_url.split('/')[-1]}): {e}")
 
-    print(f"  WeWorkRemotely: {len(jobs)} jobs fetched")
+    print(f"  WeWorkRemotely: {len(jobs)} jobs fetched ({skipped_us} US/Americas-only skipped)")
     return jobs
 
 
