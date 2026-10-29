@@ -13,6 +13,13 @@ User says `fit-check <url>` or pastes a job URL asking "is this a good fit" / "c
 
 ## Steps
 
+0. **Check the tracker first (always, before any other step).** Run
+   `python .claude/skills/search/scripts/search_tracker.py "<url>"`, then again with the company name once you
+   know it (from the JD title or page). Compare the company's rows with this posting's role title. If the same or a
+   near-identical role is already tracked (applied, in progress or rejected, including reposts under another URL),
+   **stop and tell the user first**: show the matching rows with status and comments, and say e.g. "already rejected
+   in row 410, another application still open in row 454". Continue only if the user says so. Other roles at the same
+   company are just mentioned in one line, no stop.
 1. Extract the URL from the user's message.
 2. Optionally extract `--title` and `--company` if the user mentioned them.
 3. Run from the project root:

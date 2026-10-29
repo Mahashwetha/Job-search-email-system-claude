@@ -13,6 +13,7 @@ No Gemini call, so it uses none of the 20/day free quota.
 
 ## Batch flow (several postings)
 
+0. Run the tracker check (step 0 below) for every URL; list all hits together and ask once before going on.
 1. `python cv_tailor.py jds <scratchpad>/jds <url1> <url2> ...` fetches all JDs in parallel into
    `jd_1.txt`, `jd_2.txt`, ... (input order). For any line marked FAILED, open the page in the browser
    or ask the user to paste it.
@@ -29,6 +30,13 @@ No Gemini call, so it uses none of the 20/day free quota.
 
 ## Steps
 
+0. **Check the tracker first (always, before any other step).** Run
+   `python .claude/skills/search/scripts/search_tracker.py "<url>"`, then again with the company name once you
+   know it (from the JD title or page). Compare the company's rows with this posting's role title. If the same or a
+   near-identical role is already tracked (applied, in progress or rejected, including reposts under another URL),
+   **stop and tell the user first**: show the matching rows with status and comments, and say e.g. "already rejected
+   in row 410, another application still open in row 454". Continue only if the user says so. Other roles at the same
+   company are just mentioned in one line, no stop.
 1. **Get the job description.** Run `python cv_tailor.py jd "<url>"`. Any job link works: LinkedIn,
    Welcome to the Jungle, Ashby and Greenhouse use the site's own data for a clean description;
    other sites (company career pages, Workday, etc.) fall back to reading the page. If it fails
