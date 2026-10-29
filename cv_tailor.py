@@ -256,10 +256,22 @@ def word_diff(base_path, new_path):
         print(f"Para {i}: " + "  |  ".join(parts))
 
 
+def _summary_text(doc):
+    """Text of the paragraph right after the 'Summary' heading, or '' if the CV has none."""
+    paras = [p for p in doc.paragraphs if p.text.strip()]
+    for i, p in enumerate(paras[:-1]):
+        if p.text.strip() == "Summary":
+            return paras[i + 1].text
+    return ""
+
+
 def _build_docx(company, edits, base_path):
     """Apply edits to a copy of base_path and save it as RESUME_OUTPUT_DIR/resume_<company>.docx."""
     from resume_tailor import safe_company_name
     doc = Document(base_path)
+    summary = _summary_text(doc)
+    if summary and not any(e["old"] in summary for e in edits.get("replace", [])):
+        print(f"WARNING: Summary not tailored for {company} (no replace edit touches it)")
     for e in edits.get("replace", []):
         _replace_in_runs(doc, e["old"], e["new"])
     if edits.get("add_skills"):

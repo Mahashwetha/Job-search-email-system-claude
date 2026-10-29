@@ -17,7 +17,7 @@ No Gemini call, so it uses none of the 20/day free quota.
    `jd_1.txt`, `jd_2.txt`, ... (input order). For any line marked FAILED, open the page in the browser
    or ask the user to paste it.
 2. Read the CV(s) once (`cv`, and the AI CV with `BASE_CV_DOCX=...` if any posting is AI-focused).
-3. Compare each JD (step 3 below). Ask ONE AskUserQuestion round for all jobs: merge the missing
+3. Compare each JD (step 3 below) and draft each job's tailored Summary (step 5 below). Ask ONE AskUserQuestion round for all jobs: merge the missing
    skills across postings and ask each skill once (a confirmed skill counts for every job that needs it).
 4. Write `<scratchpad>/batch.json`:
    `[{"company": "Acme Backend", "base": "main", "edits": {"replace": [...], "add_skills": [...]}}, ...]`
@@ -25,7 +25,7 @@ No Gemini call, so it uses none of the 20/day free quota.
    (e.g. company + role) so the PDFs don't overwrite each other.
 5. `python cv_tailor.py apply-batch <scratchpad>/batch.json` (optional `--workers N`, default 3).
    All edits are checked before any PDF is made; PDFs export in parallel, one Word instance per worker.
-6. Report per job as in step 7 (one table per job is fine).
+6. Report per job as in step 8 (one table per job is fine), including the tailored summary.
 
 ## Steps
 
@@ -41,12 +41,18 @@ No Gemini call, so it uses none of the 20/day free quota.
    to 4 missing skills each, mandatory JD skills first. Question text like "Which of these have you
    used in real work?". The user can type extra detail in "Other" (e.g. the tool they used).
    If a confirmed skill needs context to be described honestly (where/how), ask a short follow-up.
-5. **Draft edits** (rules below) and write them to a JSON file in the scratchpad:
+5. **Tailor the Summary (always).** Both base CVs have a `Summary` paragraph right after the contact line
+   (one plain run). Rewrite it for this JD as a `replace` whose `old` is the whole summary text from step 2:
+   2-3 lines, lead with the JD's top requirement that the CV can prove (e.g. Java/Spring backend, architecture
+   and mentoring for lead/staff roles, LLM work for AI roles), mirror the JD's role title when it fits,
+   keep "11+ yrs", and use only facts already on the CV or confirmed in step 4. Never name a skill the user
+   didn't confirm, and don't claim the JD's stack (e.g. "Ruby") to match it. `apply` prints a WARNING if no edit touches the summary.
+6. **Draft the other edits** (rules below) and write them to a JSON file in the scratchpad:
    `{"replace": [{"old": "...", "new": "..."}], "add_skills": ["..."]}`.
    Each `old` must sit inside ONE run of the DOCX. Bold highlights are separate runs, so keep each
    edit within a plain or a bold segment of the paragraph text from step 2.
-6. **Apply.** Run `python cv_tailor.py apply "<Company>" <edits.json>`.
-7. **Report** the "Words changed" output from `apply` (shown as removed -> added), the confirmed skills added, the page count,
+7. **Apply.** Run `python cv_tailor.py apply "<Company>" <edits.json>`.
+8. **Report** the "Words changed" output from `apply` (shown as removed -> added), the confirmed skills added, the page count,
    the JD skills still missing, and the output paths.
 
 ## Edit rules
@@ -58,7 +64,7 @@ No Gemini call, so it uses none of the 20/day free quota.
   job's bullet, unless the user said where they used it.
 - "Claude Code hooks (guardrails)" is added to the AI skills line of EVERY tailored CV by `apply`
   (`CV_ALWAYS_AI_SKILLS` in `config.py`; `AI & Upskilling:` on the main CV, `AI & LLM:` on the AI CV).
-  Don't put it in `add_skills` or a `replace` yourself. Mention it in the step 7 report.
+  Don't put it in `add_skills` or a `replace` yourself. Mention it in the step 8 report.
 - AI CV only: `apply` also runs `CV_AI_DEFAULT_REPLACE` from `config.py` (adds the weekly HR agent to the
   job-search project bullet). Don't repeat it in your edits; mention it in the report.
 - Never write "learning / deepening / upskilling in X" for a gap.
