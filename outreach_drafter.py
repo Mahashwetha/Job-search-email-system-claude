@@ -25,6 +25,7 @@ _BACKGROUND = USER_PROFILE.get('background', 'a software engineer')
 _DOMAIN = USER_PROFILE.get('domain_expertise', 'software development')
 _NAME = USER_PROFILE.get('name', 'Your Name')
 _PROOF_POINT = USER_PROFILE.get('proof_point', 'delivered production systems at scale')
+_LANGUAGES = USER_PROFILE.get('languages', '')
 
 # --- Templates (all personal info comes from USER_PROFILE in config.py) ---
 
@@ -56,7 +57,7 @@ SHORT_MULTI_ROLE_SUMMARY = (
 LONG_TEMPLATE = (
     "Hi [Name],\n\n"
     "{{role_section}} I have {years}+ years in {domain}, and most recently I {proof_point}.\n\n"
-    "I'm based in {location}, with full right to work and no sponsorship needed. "
+    "I'm based in {location}, with full right to work and no sponsorship needed.{languages} "
     "Background: {linkedin}\n\n"
     "Would you be open to a short call at your earliest convenience? If easier, feel free "
     "to share a link where I can book a slot. If this isn't under your purview, I'd be "
@@ -69,6 +70,7 @@ LONG_TEMPLATE = (
     years=EXPERIENCE_YEARS,
     domain=_DOMAIN,
     proof_point=_PROOF_POINT,
+    languages=(' ' + _LANGUAGES) if _LANGUAGES else '',
     linkedin=LINKEDIN_URL,
 )
 

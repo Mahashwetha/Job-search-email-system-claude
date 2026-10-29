@@ -34,6 +34,7 @@ USER_PROFILE = {
     'experience_years': 5,                          # Years of experience
     'location': 'City, Country',                    # Current location
     'domain_expertise': 'software development',     # Short domain, e.g. "Java/fintech"
+    'languages': 'English is fluent; French at B1.',  # Optional sentence after the right-to-work line
     'proof_point': 'built a payments API used by 1M users',  # One concrete achievement for outreach openers
 }
 
