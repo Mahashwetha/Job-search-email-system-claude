@@ -87,6 +87,7 @@ SUBJECT: {subject}
 For each draft, send via `send_outreach_emails.py` (or an equivalent direct SMTP send of the draft's own SUBJECT/body, which was built from `email_followup_template.txt` (or `email_followup_ai_template.txt` for AI roles) for tracked roles or `email_cold_outreach_spontaneous_template.txt` otherwise; never `email_cold_outreach_template.txt`) — no confirmation prompt, no dry-run-to-self step.
 
 Do NOT send, and instead note as skipped in the receipt (see Step 4), if:
+- Finding a contact or email address: use Apollo, then Hunter, then RocketReach (same order as the update-hr skill), before any guessed pattern.
 - The contact's email is **flagged undeliverable/invalid by Hunter (or any verifier)**. Confirmed 2026-08-17: `cecile.grondin@netatmo.com` was flagged "undeliverable" by Hunter, sent anyway, and did in fact bounce/get flagged by Netatmo's mail server — so trust the verifier's "invalid/undeliverable" status and skip rather than guess-and-send.
 - A guessed email has **no verification at all** (Hunter wasn't able to check it, e.g. accept-all domain) — still send it, but flag it clearly as unverified in the receipt so the user knows it's a lower-confidence guess. This is different from a confirmed-bad flag above.
 - The job listing URL returns 404 or any "no longer available" signal — skip, do not send, note it in the receipt.

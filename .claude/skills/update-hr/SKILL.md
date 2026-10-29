@@ -7,6 +7,16 @@ description: This skill should be used when the user wants to find, add, or upda
 
 Find LinkedIn recruiter profiles for a company and add them to column E of `List.xlsx`.
 
+## Step 0 — Lead tools first: Apollo, then Hunter, then RocketReach
+
+Always try the connectors in this order (user rule, 2026-10-29), moving on only when one gives nothing usable:
+1. **Apollo**: `apollo_organizations_lookup` (free) for the domain, then people search. The Free plan blocks
+   `apollo_mixed_people_api_search` and `apollo_agent_find_prospects` (API_INACCESSIBLE): treat that as "no result".
+2. **Hunter**: `Domain-Search` on the company domain with `department: hr`. "Reached the limit" = quota gone, move on.
+3. **RocketReach**: `person_search` with `current_employer`, `department: HR`, `country: FR`. Needs a paid plan.
+
+Only if all three give nothing, fall back to the LinkedIn WebSearch in Step 1.
+
 ## Step 1 — Search LinkedIn
 
 Use WebSearch with this query:
