@@ -44,7 +44,7 @@ def _company_match(q, company, exact):
     return c == q if exact else q in c
 
 
-def mark_rejected(company_name, dry_run=False, role=None, rows=None, exact=False):
+def mark_rejected(company_name, dry_run=False, role=None, rows=None, exact=False, comment=None):
     with T.tracker_lock():
         wb = T.load()
         ws = wb["Sheet1"]
@@ -85,6 +85,11 @@ def mark_rejected(company_name, dry_run=False, role=None, rows=None, exact=False
         backup_path = T.backup()
         for r, *_ in matched:
             ws.cell(row=r, column=T.COL_STATUS).value = "Rejected"
+            if comment:
+                notes = ws.cell(row=r, column=T.COL_NOTES)
+                old = T.cell_text(notes.value).strip()
+                if comment not in old:
+                    notes.value = f"{old} | {comment}" if old else comment
             apply_strikethrough(ws, r)
         T.save(wb)
     for r, co, rl, _ in matched:
@@ -101,9 +106,11 @@ if __name__ == '__main__':
     p.add_argument("--role", help="only rows whose column B contains this text (case-insensitive)")
     p.add_argument("--row", type=int, action="append", help="only this row number (repeatable)")
     p.add_argument("--exact", action="store_true", help="column A must equal the company name (case-insensitive)")
+    p.add_argument("--comment", help="note appended to column F (kept once, existing text preserved)")
     a = p.parse_args()
     try:
-        sys.exit(mark_rejected(a.company, dry_run=a.dry_run, role=a.role, rows=a.row, exact=a.exact))
+        sys.exit(mark_rejected(a.company, dry_run=a.dry_run, role=a.role, rows=a.row, exact=a.exact,
+                               comment=a.comment))
     except (TimeoutError, PermissionError) as e:
         print(f"ERROR: {e}")
         sys.exit(1)

@@ -20,6 +20,7 @@ Optional filters (combine freely, all must hold):
 | `--dry-run` | List the rows that would change (and the company's other rows that the filters exclude). Changes nothing. |
 | `--role "text"` | Only rows whose column B (role) contains the text, case-insensitive. |
 | `--row N` | Only that exact row number. Repeatable (`--row 42 --row 57`). Column A must still match the company, otherwise nothing is changed. |
+| `--comment "text"` | Append a note to column F (e.g. "Archived on Free-Work"); existing comments are kept, the same note is never added twice. |
 | `--exact` | Column A must equal the company name (case-insensitive) instead of containing it. Use for short names, e.g. `"Alan"` would otherwise also hit `"Talan"`. |
 
 ### When a company has several rows
