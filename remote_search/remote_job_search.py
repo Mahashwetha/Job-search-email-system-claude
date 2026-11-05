@@ -304,72 +304,47 @@ def fetch_arbeitnow():
     return jobs
 
 
-def _fetch_jobicy_remote_from(url):
-    """Fetch a Jobicy job page and return the 'Remote from' country (e.g. 'USA', 'Worldwide').
-    Returns empty string on failure."""
-    try:
-        resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
-        if resp.status_code != 200:
-            return ''
-        m = re.search(r'<dt>Remote from</dt><dd>(.*?)</dd>', resp.text, re.DOTALL)
-        if m:
-            countries = re.findall(r'>([^<]+)</a>', m.group(1))
-            return ', '.join(c.strip() for c in countries if c.strip()) if countries else ''
-        return ''
-    except Exception:
-        return ''
-
-
 def fetch_jobicy():
-    """Fetch jobs from Jobicy RSS feed (remote tech jobs).
+    """Fetch remote engineering jobs from the Jobicy API (v2).
 
-    The RSS <region> field only says 'Remote' without a country. We fetch each
-    job page to read the 'Remote from [country]' field shown in the sidebar,
-    and use that as the location so the EMEA filter can work correctly.
+    The API's jobGeo field is the 'Remote from' region shown on the job page, so no
+    per-page fetch is needed (page fetches hit HTTP 429 after ~20 requests).
+    Jobs not open from France/Europe/EMEA/worldwide (e.g. 'USA') are skipped (rule 2026-11-02).
     """
     jobs = []
+    _priority_remote_from = {'france', 'worldwide', 'anywhere', 'anywhere in the world',
+                             'europe', 'emea', 'world', 'global', 'eu'}
     try:
         resp = requests.get(
-            'https://jobicy.com/feed/newjobs',
+            'https://jobicy.com/api/v2/remote-jobs',
+            params={'count': 100, 'industry': 'engineering'},
             headers={'User-Agent': 'RemoteJobSearch/1.0'},
-            timeout=15,
+            timeout=20,
         )
         resp.raise_for_status()
-        root = ET.fromstring(resp.text)
+        items = resp.json().get('jobs', [])
 
-        for item in root.findall('./jobs/job'):
-            pub_date = item.findtext('pubdate', '')
-            posted = ''
-            if pub_date:
-                try:
-                    posted = datetime.strptime(pub_date.strip(), '%d.%m.%Y').strftime('%Y-%m-%d')
-                except Exception:
-                    posted = pub_date[:10]
-
-            job_url = item.findtext('link', '')
-            remote_from = _fetch_jobicy_remote_from(job_url) if job_url else ''
-            location = f'Remote from {remote_from}' if remote_from else item.findtext('region', 'Remote')
-            time.sleep(0.5)
-
-            # Skip jobs not open to EU/global applicants
-            _priority_remote_from = {'', 'france', 'worldwide', 'anywhere', 'anywhere in the world',
-                                     'europe', 'emea', 'world', 'global', 'eu'}
+        for item in items:
+            remote_from = re.sub(r'\s+', ' ', item.get('jobGeo') or '').strip()
+            # Unknown region -> skip: it could be USA-only
             rf_parts = [p.strip().lower() for p in remote_from.split(',')]
-            _is_priority = not remote_from or any(p in _priority_remote_from for p in rf_parts)
-            if not _is_priority:
+            if not any(p in _priority_remote_from for p in rf_parts):
                 continue
 
+            job_type = item.get('jobType') or ''
+            if isinstance(job_type, list):
+                job_type = ', '.join(job_type)
             entry = {
-                'company': unescape(item.findtext('company', '')),
-                'title': unescape(item.findtext('name', '')),
-                'url': job_url,
+                'company': unescape(item.get('companyName', '')),
+                'title': unescape(item.get('jobTitle', '')),
+                'url': item.get('url', ''),
                 'source': 'Jobicy',
-                'location': location,
-                'tags': item.findtext('jobtype', ''),
-                'posted_date': posted,
+                'location': f'Remote from {remote_from}',
+                'tags': job_type,
+                'posted_date': (item.get('pubDate') or '')[:10],
             }
             jobs.append(entry)
-        print(f"  Jobicy: {len(jobs)} jobs fetched")
+        print(f"  Jobicy: {len(jobs)} jobs fetched ({len(items)} in API, non-EU regions skipped)")
     except Exception as e:
         print(f"  Jobicy error: {e}")
     return jobs
@@ -513,13 +488,35 @@ def fetch_linkedin_france():
     return jobs
 
 
+# Skip LinkedIn jobs with more applicants than this ("Over 100 applicants" / "Over 100 people clicked apply").
+# Only checked where the posting is already fetched for its description.
+MAX_LINKEDIN_APPLICANTS = 50
+
+
+def _linkedin_applicant_count(html):
+    """Parse the applicant caption of a LinkedIn guest jobPosting page.
+    'Over 100 applicants' -> 101, '58 applicants' -> 58, 'Be among the first 25' -> 0, none -> None."""
+    m = re.search(r'num-applicants__caption[^>]*>\s*([^<]*?)\s*<', html)
+    if not m:
+        return None
+    caption = m.group(1).lower()
+    if 'among the first' in caption:
+        return 0
+    num = re.search(r'([\d,]+)', caption)
+    if not num:
+        return None
+    count = int(num.group(1).replace(',', ''))
+    return count + 1 if 'over' in caption else count
+
+
 def _check_emea_timezone_in_description(job_id, strict=False):
     """Fetch LinkedIn job description and check for explicit EMEA timezone compatibility.
 
-    Returns: 'emea' | 'us_only' | 'unknown'
+    Returns: 'emea' | 'us_only' | 'unknown' | 'crowded'
     - emea: explicit EMEA/Europe/flexible timezone signals found
     - us_only: US-only timezone signals found → reject
     - unknown: no timezone info found → reject (too risky)
+    - crowded: over MAX_LINKEDIN_APPLICANTS applicants → reject
 
     strict=True: used for US-city jobs — requires very explicit remote/EMEA signals,
                  rejects broad signals like 'global team', 'async' that US office jobs use too.
@@ -529,6 +526,10 @@ def _check_emea_timezone_in_description(job_id, strict=False):
         resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
         if resp.status_code != 200:
             return 'unknown'
+
+        applicants = _linkedin_applicant_count(resp.text)
+        if applicants is not None and applicants > MAX_LINKEDIN_APPLICANTS:
+            return 'crowded'
 
         match = re.search(r'show-more-less-html__markup[^>]*>(.*?)</div', resp.text, re.DOTALL)
         if not match:
@@ -651,6 +652,8 @@ def fetch_linkedin_global():
             if strict:
                 job['us_city'] = True  # flag for badge in email
             jobs.append(job)
+        elif result == 'crowded':
+            print(f"    '{job['title']}' @ {job['company']}: over {MAX_LINKEDIN_APPLICANTS} applicants, skipping")
         time.sleep(1)  # rate limit
 
     print(f"  LinkedIn Global (India/Boston/NY): {len(jobs)} EMEA-compatible jobs (from {len(candidates)} candidates)")

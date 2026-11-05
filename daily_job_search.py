@@ -479,24 +479,47 @@ def fetch_linkedin_jobs(keywords, location, max_pages=3):
     return jobs
 
 
+# Skip LinkedIn jobs with more applicants than this ("Over 100 applicants" / "Over 100 people clicked apply").
+# Only checked where the posting is already fetched for its description.
+MAX_LINKEDIN_APPLICANTS = 50
+
+
+def _linkedin_applicant_count(html):
+    """Parse the applicant caption of a LinkedIn guest jobPosting page.
+    'Over 100 applicants' -> 101, '58 applicants' -> 58, 'Be among the first 25' -> 0, none -> None."""
+    m = re.search(r'num-applicants__caption[^>]*>\s*([^<]*?)\s*<', html)
+    if not m:
+        return None
+    caption = m.group(1).lower()
+    if 'among the first' in caption:
+        return 0
+    num = re.search(r'([\d,]+)', caption)
+    if not num:
+        return None
+    count = int(num.group(1).replace(',', ''))
+    return count + 1 if 'over' in caption else count
+
+
 def fetch_linkedin_job_description(url):
-    """Fetch the full description text of a LinkedIn job posting via the guest API."""
+    """Fetch a LinkedIn job posting via the guest API.
+    Returns (description text lowercased, applicant count or None)."""
     try:
         job_id_match = re.search(r'-(\d+)(?:\?|$)', url)
         if not job_id_match:
-            return ''
+            return '', None
         job_id = job_id_match.group(1)
         api_url = f'https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}'
         resp = requests.get(api_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
         if resp.status_code != 200:
-            return ''
+            return '', None
+        applicants = _linkedin_applicant_count(resp.text)
         match = re.search(r'show-more-less-html__markup[^>]*>(.*?)</div', resp.text, re.DOTALL)
         if not match:
-            return ''
+            return '', applicants
         text = re.sub(r'<[^>]+>', ' ', match.group(1))
-        return ' '.join(text.split()).lower()
+        return ' '.join(text.split()).lower(), applicants
     except Exception:
-        return ''
+        return '', None
 
 
 def fetch_wttj_jobs(query, max_pages=3):
@@ -964,7 +987,11 @@ def fetch_hot_jobs(tracker):
                 for job in candidates:
                     if filled >= slots_needed:
                         break
-                    desc = fetch_linkedin_job_description(job['url'])
+                    desc, applicants = fetch_linkedin_job_description(job['url'])
+                    if applicants is not None and applicants > MAX_LINKEDIN_APPLICANTS:
+                        print(f"    '{job['title']}' @ {job['company']}: over {MAX_LINKEDIN_APPLICANTS} applicants, skipping")
+                        time.sleep(2)
+                        continue
                     if not desc or any(kw in desc for kw in desc_required):
                         kept.append(job)
                         global_urls.add(job['url'])

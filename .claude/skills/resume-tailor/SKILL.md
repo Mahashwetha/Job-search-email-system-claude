@@ -49,8 +49,9 @@ No Gemini call, so it uses none of the 20/day free quota.
    to 4 missing skills each, mandatory JD skills first. Question text like "Which of these have you
    used in real work?". The user can type extra detail in "Other" (e.g. the tool they used).
    If a confirmed skill needs context to be described honestly (where/how), ask a short follow-up.
-5. **Tailor the Summary (always).** Both base CVs have a `Summary` paragraph right after the contact line
-   (one plain run). Rewrite it for this JD as a `replace` whose `old` is the whole summary text from step 2:
+5. **Tailor the Summary (AI CV only).** The main CV has NO Summary since 2026-11-05 (removed to keep it to 1 page;
+   the real-time/post-trade line moved into the NASDAQ SMARTS bullet), so skip this step for `main`; `apply` skips the
+   check too. The AI CV has a `Summary` paragraph right after the contact line (one plain run). Rewrite it for this JD as a `replace` whose `old` is the whole summary text from step 2:
    2-3 lines, lead with the JD's top requirement that the CV can prove (e.g. Java/Spring backend, architecture
    and mentoring for lead/staff roles, LLM work for AI roles), mirror the JD's role title when it fits,
    keep "11+ yrs", and use only facts already on the CV or confirmed in step 4. Never name a skill the user
@@ -70,7 +71,7 @@ No Gemini call, so it uses none of the 20/day free quota.
   word "fintech" in the SMARTS bullet. No "| Fintech" in the title line.
 - Confirmed skills go into the `Frameworks & Tools:` line via `add_skills`, not into a specific
   job's bullet, unless the user said where they used it.
-- "Claude Code hooks (guardrails)" is added to the AI skills line of EVERY tailored CV by `apply`
+- "Agent guardrails" is added to the AI skills line of EVERY tailored CV by `apply`
   (`CV_ALWAYS_AI_SKILLS` in `config.py`; `AI & Upskilling:` on the main CV, `AI & LLM:` on the AI CV).
   Don't put it in `add_skills` or a `replace` yourself. Mention it in the step 8 report.
 - AI CV only: `apply` also runs `CV_AI_DEFAULT_REPLACE` from `config.py` (adds the weekly HR agent to the
