@@ -46,6 +46,8 @@ echo yes | python send_outreach_emails.py --name "[NAME]" --email "[EMAIL]" --co
 
 Add `--cc "[CC_EMAIL]"` if a CC was provided.
 
+Add `--why "..."` with 1 specific, true reason this company appeals (their product, domain or tech, ideally tied to SMARTS/post-trade). It completes "What drew me to {company} specifically is ...". Leave it out rather than write something generic; the line is then dropped.
+
 ## What the script does automatically
 
 - Looks up the role from `List.xlsx` (matches company name, status = `done`)

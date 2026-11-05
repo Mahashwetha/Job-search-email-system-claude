@@ -59,9 +59,9 @@ LONG_TEMPLATE = (
     "{{role_section}} I have {years}+ years in {domain}, and most recently I {proof_point}.\n\n"
     "I'm based in {location}, with full right to work and no sponsorship needed.{languages} "
     "Background: {linkedin}\n\n"
-    "Would you be open to a short call at your earliest convenience? If easier, feel free "
-    "to share a link where I can book a slot. If this isn't under your purview, I'd be "
-    "grateful to be pointed to the right person.\n\n"
+    "If you're the right person, I'd be glad to have a short chat. If not, could you point "
+    "me to whoever is hiring for this role? If easier, feel free to share a link where I "
+    "can book a slot.\n\n"
     "Best regards,\n"
     "{user_name}"
 ).format(

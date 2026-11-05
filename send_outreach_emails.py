@@ -91,8 +91,11 @@ def load_template(name):
         return f.read()
 
 
-def fill_template(template, first_name, company, role):
-    return template.replace('{first_name}', first_name) \
+def fill_template(template, first_name, company, role, why=''):
+    # {why_line}: optional "why this company" sentence; removed when no reason is given
+    why_line = f' What drew me to {company} specifically is {why.strip().rstrip(".")}.' if why.strip() else ''
+    return template.replace('{why_line}', why_line) \
+                   .replace('{first_name}', first_name) \
                    .replace('{company}', company) \
                    .replace('{role}', role)
 
@@ -143,6 +146,7 @@ def main():
     parser.add_argument('--company', required=True, help='Company name')
     parser.add_argument('--cc',      default='',    help='CC email (optional)')
     parser.add_argument('--role',    default='',    help='Override role (skips tracker lookup)')
+    parser.add_argument('--why',     default='',    help='Why this company, finishes "What drew me to <company> specifically is ..." (optional)')
     args = parser.parse_args()
 
     first_name = args.name.split()[0]
@@ -169,7 +173,7 @@ def main():
             print(f"Using spontaneous template")
 
     template = load_template(template_file)
-    filled   = fill_template(template, first_name, args.company, role)
+    filled   = fill_template(template, first_name, args.company, role, args.why)
     subject  = extract_subject(filled)
     body     = extract_body(filled)
 
