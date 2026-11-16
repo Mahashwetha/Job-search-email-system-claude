@@ -7,16 +7,21 @@ description: This skill should be used when the user wants to find, add, or upda
 
 Find LinkedIn recruiter profiles for a company and add them to column E of `List.xlsx`.
 
-## Step 0 — Lead tools first: Hunter, then RocketReach
+## Step 0 — Free Apollo search first, then Hunter, then RocketReach
 
-Always try the connectors in this order (user rule, 2026-10-29), moving on only when one gives nothing usable:
-1. **Hunter**: `Domain-Search` on the company domain with `department: hr`. "Reached the limit" = quota gone, move on.
-2. **RocketReach**: `person_search` with `current_employer`, `department: HR`, `country: FR`. Needs a paid plan.
+Order (her rule 2026-11-12), moving on only when one gives nothing usable:
+1. **Apollo web search (free)**: follow the `find-contacts` skill: check she's signed in to app.apollo.io in the
+   in-app browser (if not, ask her to sign in; signed out is not a reason to skip to Hunter), search the recruiter
+   (and the team's hiring manager, her favourite pair), build emails free with `routines/pick_contacts.py`.
+   **Never click "Access email" / reveal without her explicit OK** (costs credits).
+2. **Hunter** (check `Get-Usage` first, 0 credits = skip): `Domain-Search` on the company domain with `department: hr`.
+3. **RocketReach** (check `account` first): `person_search` with `current_employer`, `department: HR`, `country: FR`.
 
-Apollo is NOT used (her choice 2026-10-29): its Free plan blocks people search and person match via Claude.
+The Apollo connector/API is NOT used: the Free plan blocks it (re-tested 2026-11-12).
 If she pastes names/emails she found herself (Hunter or Apollo extension on LinkedIn), use those as-is.
 
-Only if both give nothing, fall back to the LinkedIn WebSearch in Step 1.
+Only if all three give nothing, fall back to the LinkedIn WebSearch in Step 1.
+For one contact with an email, prefer `scripts/add_hr_contact.py` (see below) over the HR_CONTACTS dict.
 
 ## Step 1 — Search LinkedIn
 

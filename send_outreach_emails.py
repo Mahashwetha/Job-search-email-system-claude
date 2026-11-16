@@ -92,8 +92,8 @@ def load_template(name):
 
 
 def fill_template(template, first_name, company, role, why=''):
-    # {why_line}: optional "why this company" sentence; removed when no reason is given
-    why_line = f' What drew me to {company} specifically is {why.strip().rstrip(".")}.' if why.strip() else ''
+    # {why_line}: optional "why them" sentence that OPENS the email (why them first, then why me); removed when no reason is given
+    why_line = f'What drew me to {company} specifically is {why.strip().rstrip(".")}. ' if why.strip() else ''
     return template.replace('{why_line}', why_line) \
                    .replace('{first_name}', first_name) \
                    .replace('{company}', company) \

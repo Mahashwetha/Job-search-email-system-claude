@@ -24,7 +24,10 @@ Or natural language: `cover letter <url>`, `generate cover letter for Constructo
 python cover_letter.py "https://job-url" "Company Name" "Role Title"
 python cover_letter.py "https://job-url" "Company Name"   # role extracted from JD
 python cover_letter.py "https://job-url" "Company Name" "Role Title" --referral "Name, their role"
+python cover_letter.py "https://job-url" "Company Name" "Role Title" --to "Jane Doe"
 ```
+
+Use `--to "Full Name"` whenever the reader's name is known (recruiter or hiring manager, e.g. from `/find-contacts` or the tracker's column E): the letter then opens "Hi Jane,". Without it, it opens "Respected Hiring Manager," (her rule 2026-11-16: the formal greeting only when the name is unknown).
 
 Use `--referral` whenever the user mentions a referral (someone at the company recommended her): the opening line then names the referrer.
 
@@ -46,7 +49,7 @@ Use `--referral` whenever the user mentions a referral (someone at the company r
 ## Template structure (fixed)
 
 1. Header (Paris, France | phone | email)
-2. "Respected Hiring Manager,"
+2. "Hi {first name}," with `--to`, else "Respected Hiring Manager,"
 3. **Opening** — Gemini-generated (achievement / company / capability / referral), validated in code
 4. **Matched skills para** — Gemini-generated
 5. **Gap bridge para** — Gemini-generated

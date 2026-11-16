@@ -46,7 +46,7 @@ echo yes | python send_outreach_emails.py --name "[NAME]" --email "[EMAIL]" --co
 
 Add `--cc "[CC_EMAIL]"` if a CC was provided.
 
-Add `--why "..."` with 1 specific, true reason this company appeals (their product, domain or tech, ideally tied to SMARTS/post-trade). It completes "What drew me to {company} specifically is ...". Leave it out rather than write something generic; the line is then dropped.
+Add `--why "..."` with 1 specific, true reason this company appeals (their product, domain or tech, ideally tied to SMARTS/post-trade). It completes "What drew me to {company} specifically is ..." and is now the email's FIRST sentence (why them, then why me; her rule 2026-11-16). Write it as a clause that reads well there, e.g. "that its fraud team just launched real-time transaction monitoring". Prefer a why-now detail (new role, launch, funding). Leave it out rather than write something generic; the line is then dropped.
 
 ## What the script does automatically
 
@@ -90,7 +90,7 @@ SUBJECT: {subject}
 For each draft, send via `send_outreach_emails.py` (or an equivalent direct SMTP send of the draft's own SUBJECT/body, which was built from `email_followup_template.txt` (or `email_followup_ai_template.txt` for AI roles) for tracked roles or `email_cold_outreach_spontaneous_template.txt` otherwise; never `email_cold_outreach_template.txt`) — no confirmation prompt, no dry-run-to-self step.
 
 Do NOT send, and instead note as skipped in the receipt (see Step 4), if:
-- Finding a contact or email address: use Hunter, then RocketReach (same order as the update-hr skill), before any guessed pattern. Apollo is not used (Free plan blocks it).
+- Finding a contact or email address: same order as the update-hr skill: free Apollo web search + email pattern (`find-contacts` skill, never an Apollo reveal without her OK), then Hunter, then RocketReach. The Apollo connector/API is not used (Free plan blocks it). Her favourite: one email to the recruiter AND one to the team's hiring manager.
 - The contact's email is **flagged undeliverable/invalid by Hunter (or any verifier)**. Confirmed 2026-08-17: `cecile.grondin@netatmo.com` was flagged "undeliverable" by Hunter, sent anyway, and did in fact bounce/get flagged by Netatmo's mail server — so trust the verifier's "invalid/undeliverable" status and skip rather than guess-and-send.
 - A guessed email has **no verification at all** (Hunter wasn't able to check it, e.g. accept-all domain) — still send it, but flag it clearly as unverified in the receipt so the user knows it's a lower-confidence guess. This is different from a confirmed-bad flag above.
 - The job listing URL returns 404 or any "no longer available" signal — skip, do not send, note it in the receipt.

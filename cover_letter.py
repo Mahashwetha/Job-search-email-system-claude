@@ -228,11 +228,17 @@ def build_opening(company, role, parts):
     return FALLBACK_OPENING.format(company=company, role=role)
 
 
-def assemble_text(company, role, parts):
+def greeting(to=''):
+    """'Hi Jane,' when the reader's name is known (--to), else the formal fallback."""
+    first = to.strip().split()[0] if to.strip() else ''
+    return f"Hi {first}," if first else "Respected Hiring Manager,"
+
+
+def assemble_text(company, role, parts, to=''):
     intro = build_opening(company, role, parts)
 
     paragraphs = [
-        "Respected Hiring Manager,",
+        greeting(to),
         "",
         intro,
         "",
@@ -252,7 +258,7 @@ def assemble_text(company, role, parts):
     return "\n".join(paragraphs)
 
 
-def save_docx(company, role, parts, output_path):
+def save_docx(company, role, parts, output_path, to=""):
     doc = Document()
 
     # Page margins
@@ -277,7 +283,7 @@ def save_docx(company, role, parts, output_path):
 
     add(HEADER, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=16)
 
-    add("Respected Hiring Manager,", space_after=8)
+    add(greeting(to), space_after=8)
 
     add(build_opening(company, role, parts), space_after=8)
 
@@ -301,7 +307,7 @@ def safe_name(s):
     return re.sub(r'[^a-z0-9_]', '_', s.lower().strip()).strip('_')
 
 
-def generate(url, company, role='', referral=''):
+def generate(url, company, role='', referral='', to=''):
     os.makedirs(COVER_LETTER_OUTPUT_DIR, exist_ok=True)
 
     print(f"  Fetching JD from {url}...")
@@ -323,10 +329,10 @@ def generate(url, company, role='', referral=''):
         return
     print(f"  Opening type: {parts.get('opening_type', '?')}")
 
-    text = assemble_text(company, role, parts)
+    text = assemble_text(company, role, parts, to)
 
     output_path = os.path.join(COVER_LETTER_OUTPUT_DIR, f"CoverLetter_{safe_name(company)}.docx")
-    save_docx(company, role, parts, output_path)
+    save_docx(company, role, parts, output_path, to)
 
     print(f"\n{'='*60}")
     print(text)
@@ -342,10 +348,15 @@ def main():
         i = args.index('--referral')
         referral = args[i + 1] if i + 1 < len(args) else ''
         args = args[:i] + args[i + 2:]
+    to = ''
+    if '--to' in args:
+        i = args.index('--to')
+        to = args[i + 1] if i + 1 < len(args) else ''
+        args = args[:i] + args[i + 2:]
     if len(args) < 2:
-        print("Usage: python cover_letter.py \"https://job-url\" \"Company Name\" [\"Role Title\"] [--referral \"Name, their role\"]")
+        print("Usage: python cover_letter.py \"https://job-url\" \"Company Name\" [\"Role Title\"] [--referral \"Name, their role\"] [--to \"Reader Name\"]")
         exit(1)
-    generate(args[0], args[1], args[2] if len(args) >= 3 else '', referral)
+    generate(args[0], args[1], args[2] if len(args) >= 3 else '', referral, to)
 
 
 if __name__ == '__main__':
